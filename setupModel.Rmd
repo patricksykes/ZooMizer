@@ -32,7 +32,7 @@ library(mizerExperimental)
 ```
 
 ### Data
-Next, let's load in the data used in the ZooMSS model.
+Next, let's load in and check the data used in the ZooMSS model. TODO: add in some biomass data
 
 ```{r}
 
@@ -53,26 +53,28 @@ groups$w_mat <- 10^groups$w_mat
 
 ## Set-up mizer model
 
-Next let's read in the parameters we've put together for a Southern Ocean (Prydz Bay) ecosystem.
+Next let's read in the parameters from ZooMSS.
 
 ```{r}
 #read groups again for southern ocean model, this time subsetting key groups
 groups <-read.csv("data/TestGroups_mizer.csv")
-groups$w_min <- 10^groups$w_min
+groups$w_min <- 10^groups$w_min #convert from log10 values
 groups$w_inf <- 10^groups$w_inf
 groups$w_mat <- 10^groups$w_mat
-groups$h <- 100
+groups$h <- 100 #maximum feeding level - very large value to reflect the unlimited feeding implicitly allowed in ZooMSS
+
 #groups <- readRDS("data/groups.RDS")[-1,]
 #check fails these tests:
-groups$w_mat25 >= groups$w_mat 
+groups$w_mat25 >= groups$w_mat #note we don't have w_mat25. Not sure if it's necessary/desirable. Probably not.
 groups$w_mat25 <= groups$w_min
 groups$w_inf <= groups$w_mat25
 
 #[-1,]
 #fix one value 
 #groups[7,"w_min"]<-4000
+
 # read interaction matrix
-# get the interaction matrix
+# get the interaction matrix - actually I think we can leave this out. Default is all 1s, which is the same as in ZooMSS. Included for completeness; it may be useful in future to keep this in.
 theta <- readRDS("data/zoomss_inter.rds")[,-1]
 #[-1,-1]
 
@@ -80,6 +82,8 @@ theta <- readRDS("data/zoomss_inter.rds")[,-1]
 ```
 
 We will pass these parameters to mizer to set up a new multispecies model.
+
+TODO: adjust parameters here.
 
 ```{r}
  
@@ -137,6 +141,10 @@ plotlyFeedingLevel(sim)
 plotlyGrowthCurves(sim,percentage = T)
 plotlySpectra(sim)
 ```
+
+
+-----Old stuff only below this line-----
+
 
 If we combine the biomassess from the model and add the data to  plot we can look at how close/far we are.
 
