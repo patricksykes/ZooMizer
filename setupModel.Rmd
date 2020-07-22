@@ -32,7 +32,7 @@ library(mizerExperimental)
 ```
 
 ### Data
-Next, let's load in the data used in the ZooMSS model.
+Next, let's load in and check the data used in the ZooMSS model. TODO: add in some biomass data
 
 ```{r}
 
@@ -53,26 +53,28 @@ groups$w_mat <- 10^groups$w_mat
 
 ## Set-up mizer model
 
-Next let's read in the parameters we've put together for a Southern Ocean (Prydz Bay) ecosystem.
+Next let's read in the parameters from ZooMSS.
 
 ```{r}
 #read groups again for southern ocean model, this time subsetting key groups
 groups <-read.csv("data/TestGroups_mizer.csv")
-groups$w_min <- 10^groups$w_min
+groups$w_min <- 10^groups$w_min #convert from log10 values
 groups$w_inf <- 10^groups$w_inf
 groups$w_mat <- 10^groups$w_mat
-groups$h <- 100
+groups$h <- 100 #maximum feeding level - very large value to reflect the unlimited feeding implicitly allowed in ZooMSS
+
 #groups <- readRDS("data/groups.RDS")[-1,]
 #check fails these tests:
-groups$w_mat25 >= groups$w_mat 
+groups$w_mat25 >= groups$w_mat #note we don't have w_mat25. Not sure if it's necessary/desirable. Probably not.
 groups$w_mat25 <= groups$w_min
 groups$w_inf <= groups$w_mat25
 
 #[-1,]
 #fix one value 
 #groups[7,"w_min"]<-4000
+
 # read interaction matrix
-# get the interaction matrix
+# get the interaction matrix - actually I think we can leave this out. Default is all 1s, which is the same as in ZooMSS. Included for completeness; it may be useful in future to keep this in.
 theta <- readRDS("data/zoomss_inter.rds")[,-1]
 #[-1,-1]
 
@@ -81,9 +83,24 @@ theta <- readRDS("data/zoomss_inter.rds")[,-1]
 
 We will pass these parameters to mizer to set up a new multispecies model.
 
+TODO: adjust parameters here.
+
 ```{r}
- 
-mf.params <- newMultispeciesParams(species_params=groups,interaction=theta,kappa = 1e3,min_w_pp = 1e-16,w_pp_cutoff = 1.995262e-11,r_pp = 10,z0pre = 0.01)
+
+mf.params <- newMultispeciesParams(species_params=groups,
+                                   interaction=NULL, #NULL sets all to 1
+                                   no_w = 100,
+                                   kappa = 1e15, #set huge to recreate unbounded feeding in ZooMSS
+                                   min_w_pp = 10^(-14.5),
+                                   w_pp_cutoff = 10^(-8),
+                                   r_pp = 20,
+                                   n = 0.7,
+                                   z0pre = 1,
+                                   z0exp = 0.3,
+                                   resource_dynamics = "resource_constant",
+                                   #RDD = constantRDD(species_params = groups) #first go at this
+                                   #pred_kernel = ... #probably easiest to just import this
+)
 
 # # mf.params@species_params$metab[1] <-0.01
 # mf.params@species_params$h[] <- 10*mf.params@species_params$ks[] 
@@ -127,7 +144,7 @@ mf.params <- newMultispeciesParams(species_params=groups,interaction=theta,kappa
 # mf.params<- setParams(mf.params,kappa=1e5) # take the new paramewters and change kappa
 
 
-sim <- project(mf.params, t_max=500,dt = 0.1)
+sim <- project(mf.params, t_max=200,dt = 0.01)
 plot(sim)
 #plotlyGrowthCurves(sim,species="macrozooplankton")
 plotlyFeedingLevel(sim)
@@ -137,6 +154,10 @@ plotlyFeedingLevel(sim)
 plotlyGrowthCurves(sim,percentage = T)
 plotlySpectra(sim)
 ```
+
+
+-----Old stuff only below this line-----
+
 
 If we combine the biomassess from the model and add the data to  plot we can look at how close/far we are.
 
