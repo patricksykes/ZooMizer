@@ -4,7 +4,6 @@ author: Patrick Sykes and Julia L. Blanchard
 date: July 22, 2020
 place: Brisbane
 output:
-  pdf_document: default
   html_document: default
 ---
 
@@ -86,8 +85,21 @@ We will pass these parameters to mizer to set up a new multispecies model.
 TODO: adjust parameters here.
 
 ```{r}
- 
-mf.params <- newMultispeciesParams(species_params=groups,interaction=theta,kappa = 1e3,min_w_pp = 1e-16,w_pp_cutoff = 1.995262e-11,r_pp = 10,z0pre = 0.01)
+
+mf.params <- newMultispeciesParams(species_params=groups,
+                                   interaction=NULL, #NULL sets all to 1
+                                   no_w = 100,
+                                   kappa = 1e15, #set huge to recreate unbounded feeding in ZooMSS
+                                   min_w_pp = 10^(-14.5),
+                                   w_pp_cutoff = 10^(-8),
+                                   r_pp = 20,
+                                   n = 0.7,
+                                   z0pre = 1,
+                                   z0exp = 0.3,
+                                   resource_dynamics = "resource_constant",
+                                   #RDD = constantRDD(species_params = groups) #first go at this
+                                   #pred_kernel = ... #probably easiest to just import this
+)
 
 # # mf.params@species_params$metab[1] <-0.01
 # mf.params@species_params$h[] <- 10*mf.params@species_params$ks[] 
