@@ -14,7 +14,7 @@ Here we will recreate the ZooMSS model (version 2) in Heneghan et al. (2020 in p
 
 We begin with some setup of required packages.
 
-```{r}
+```{r setup, message=FALSE, warning=FALSE}
 #get required packages
 library(devtools)
 #most up to date master branch of mizer
