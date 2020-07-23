@@ -86,21 +86,8 @@ We will pass these parameters to mizer to set up a new multispecies model.
 TODO: adjust parameters here.
 
 ```{r}
-
-mf.params <- newMultispeciesParams(species_params=groups,
-                                   interaction=NULL, #NULL sets all to 1
-                                   no_w = 100,
-                                   kappa = 1e15, #set huge to recreate unbounded feeding in ZooMSS
-                                   min_w_pp = 10^(-14.5),
-                                   w_pp_cutoff = 10^(-8),
-                                   r_pp = 20,
-                                   n = 0.7,
-                                   z0pre = 1,
-                                   z0exp = 0.3,
-                                   resource_dynamics = "resource_constant",
-                                   #RDD = constantRDD(species_params = groups) #first go at this
-                                   #pred_kernel = ... #probably easiest to just import this
-)
+ 
+mf.params <- newMultispeciesParams(species_params=groups,interaction=theta,kappa = 1e3,min_w_pp = 1e-16,w_pp_cutoff = 1.995262e-11,r_pp = 10,z0pre = 0.01)
 
 # # mf.params@species_params$metab[1] <-0.01
 # mf.params@species_params$h[] <- 10*mf.params@species_params$ks[] 
@@ -144,7 +131,7 @@ mf.params <- newMultispeciesParams(species_params=groups,
 # mf.params<- setParams(mf.params,kappa=1e5) # take the new paramewters and change kappa
 
 
-sim <- project(mf.params, t_max=200,dt = 0.01)
+sim <- project(mf.params, t_max=500,dt = 0.1)
 plot(sim)
 #plotlyGrowthCurves(sim,species="macrozooplankton")
 plotlyFeedingLevel(sim)
@@ -159,338 +146,338 @@ plotlySpectra(sim)
 -----Old stuff only below this line-----
 
 
-If we combine the biomassess from the model and add the data to  plot we can look at how close/far we are.
-
-```{r}
-# get biomass and covert to tonnes per area
-plotBioData <- function (sim,dat){
-simbio<-getBiomass(sim)
-simbio<-data.frame(species=mf.params@species_params$species,w_inf=mf.params@species_params$w_inf,simbio=simbio[100,]/1e6)
-
-simbio<-as.data.frame(merge(simbio,dat,by.x="species",by.y="group",all=T))
-
-#have a look at plot with both modelled total biomass and observed for top predators
-plot(simbio$w_inf,simbio$simbio,xlab="log Maximum Weight [g]", ylab=" log Total Biomass", log="xy",col="grey",
-pch=16,ylim=c(min(simbio$simbio,simbio$biomass.tperkm2,na.rm=T),max(simbio$simbio,simbio$biomass.tperkm2,na.rm=T)))
-points(simbio$w_inf,simbio$biomass.tperkm2,col="blue",pch=1)
-text(simbio$w_inf,simbio$simbio,labels=simbio$species,cex=0.5)
-return(simbio)
-}
-
-plotBioData(sim,dat)
-
-
-# 
-# 
-# ## have a look at paramters - metabolism
-# plot(mf.params@species_params$w_inf,mf.params@species_params$ks,log="x")
-# text(mf.params@species_params$w_inf,mf.params@species_params$ks,labels=params@species_params$species,cex=0.5)
-# 
-# ## have a look at paramters - h
-# plot(mf.params@species_params$w_inf,mf.params@species_params$h,log="x")
-# text(mf.params@species_params$w_inf,mf.params@species_params$h,labels=params@species_params$species,cex=0.5)
-# # 
-
- # plot(mf.params@species_params$w_inf,mf.params@species_params$ks/mf.params@species_params$h,log="x")
- # text(mf.params@species_params$w_inf,mf.params@species_params$ks/mf.params@species_params$h,labels=params@species_params$species,cex=0.5)
-# 
-
-# # ## have a look at paramters - gamma
-#  plot(mf.params@species_params$w_inf,mf.params@species_params$gamma,log="xy")
-#  text(mf.params@species_params$w_inf,mf.params@species_params$gamma,labels=params@species_params$species,cex=0.5)
-# # 
-# # 
-# # ## have a look at paramters - wmat/winf
-#  plot(mf.params@species_params$w_inf,mf.params@species_params$w_mat/mf.params@species_params$w_inf,log="xy",xlab=c("Weight"),y=c("Wmat/Winf"))
-#  text(mf.params@species_params$w_inf,mf.params@species_params$w_mat/mf.params@species_params$w_inf,labels=params@species_params$species,cex=0.5)
- 
-# changes need to maturation sizes - zoop groups -> wmat 50% of winf
-```
-# Model Assumptions
-### Feeding kernels
-Let's change some of the parameters which make some of these groups less fishy! The feeding kernel in teh above model is set up for fish. Here we use the model of Heneghan to describe a more planktivours feeding kernel form zooplankton and baleen whales.
-```{r}
-
-####### feeding kernels - use box kernels for planktovores instead?
-params<-mf.params
-
-#new predation kernel varies with pred size and species but is the same for all prey species, need to fill this in with values, according to Ryans' code
-pred_kern <- array(0, dim=c(length(params@species_params$species),length(params@w),length(params@w_full)),dimnames=list(params@species_params$species,params@w,params@w_full))
-
-#### change the feeding kernel
-pred_kern[]<- mf.params@species_params$beta
-
-#mvals<-groups$m ### need to enter these manually as removed from file because of new m parameter in mizer setparams function
-#shift over microzoop
-#mvals[1]<--2
-
-mvals <-c(
-NA,
-0.73,
-NA,
-NA,
-NA,
-NA,
-NA,
-NA,
-NA,
-NA,
-1.5)
-
-
-### Ryan's feeding kernel:
-for (i in 1:length(mvals)) {
-  
-  D.z <- 2*(3*params@w*1e12/(4*pi))^(1/3) # convert body mass g to ESD (um)
-  betas =  (exp(0.02*log(D.z)^2 - mvals[i] + 1.832))^3
-  
-  if (!is.na(mvals[i])) pred_kern[i,,]<- betas
-  
-}
-  pred_kern[]<-exp(-0.5*sweep(log(sweep(sweep(pred_kern,3,params@w_full,"*")^-1,2,params@w,"*")),1,params@species_params$sigma,"/")^2)
-  pred_kern[] <- sweep(pred_kern,c(2,3),combn(params@w_full,1,function(x,w)x<params@w,w=params@w),"*") # find out the untrues and then multiply
-  
-##### box feeding kernel for baleen whales  
+<!-- If we combine the biomassess from the model and add the data to  plot we can look at how close/far we are. -->
+
+<!-- ```{r} -->
+<!-- # get biomass and covert to tonnes per area -->
+<!-- plotBioData <- function (sim,dat){ -->
+<!-- simbio<-getBiomass(sim) -->
+<!-- simbio<-data.frame(species=mf.params@species_params$species,w_inf=mf.params@species_params$w_inf,simbio=simbio[100,]/1e6) -->
+
+<!-- simbio<-as.data.frame(merge(simbio,dat,by.x="species",by.y="group",all=T)) -->
+
+<!-- #have a look at plot with both modelled total biomass and observed for top predators -->
+<!-- plot(simbio$w_inf,simbio$simbio,xlab="log Maximum Weight [g]", ylab=" log Total Biomass", log="xy",col="grey", -->
+<!-- pch=16,ylim=c(min(simbio$simbio,simbio$biomass.tperkm2,na.rm=T),max(simbio$simbio,simbio$biomass.tperkm2,na.rm=T))) -->
+<!-- points(simbio$w_inf,simbio$biomass.tperkm2,col="blue",pch=1) -->
+<!-- text(simbio$w_inf,simbio$simbio,labels=simbio$species,cex=0.5) -->
+<!-- return(simbio) -->
+<!-- } -->
+
+<!-- plotBioData(sim,dat) -->
+
+
+<!-- #  -->
+<!-- #  -->
+<!-- # ## have a look at paramters - metabolism -->
+<!-- # plot(mf.params@species_params$w_inf,mf.params@species_params$ks,log="x") -->
+<!-- # text(mf.params@species_params$w_inf,mf.params@species_params$ks,labels=params@species_params$species,cex=0.5) -->
+<!-- #  -->
+<!-- # ## have a look at paramters - h -->
+<!-- # plot(mf.params@species_params$w_inf,mf.params@species_params$h,log="x") -->
+<!-- # text(mf.params@species_params$w_inf,mf.params@species_params$h,labels=params@species_params$species,cex=0.5) -->
+<!-- # #  -->
+
+<!--  # plot(mf.params@species_params$w_inf,mf.params@species_params$ks/mf.params@species_params$h,log="x") -->
+<!--  # text(mf.params@species_params$w_inf,mf.params@species_params$ks/mf.params@species_params$h,labels=params@species_params$species,cex=0.5) -->
+<!-- #  -->
+
+<!-- # # ## have a look at paramters - gamma -->
+<!-- #  plot(mf.params@species_params$w_inf,mf.params@species_params$gamma,log="xy") -->
+<!-- #  text(mf.params@species_params$w_inf,mf.params@species_params$gamma,labels=params@species_params$species,cex=0.5) -->
+<!-- # #  -->
+<!-- # #  -->
+<!-- # # ## have a look at paramters - wmat/winf -->
+<!-- #  plot(mf.params@species_params$w_inf,mf.params@species_params$w_mat/mf.params@species_params$w_inf,log="xy",xlab=c("Weight"),y=c("Wmat/Winf")) -->
+<!-- #  text(mf.params@species_params$w_inf,mf.params@species_params$w_mat/mf.params@species_params$w_inf,labels=params@species_params$species,cex=0.5) -->
+
+<!-- # changes need to maturation sizes - zoop groups -> wmat 50% of winf -->
+<!-- ``` -->
+<!-- # Model Assumptions -->
+<!-- ### Feeding kernels -->
+<!-- Let's change some of the parameters which make some of these groups less fishy! The feeding kernel in teh above model is set up for fish. Here we use the model of Heneghan to describe a more planktivours feeding kernel form zooplankton and baleen whales. -->
+<!-- ```{r} -->
 
-  
-  
-  
-####### psi function
-  
-#   # Change allocation to reproduction = check for endotherms/determinate growers (should be 1 at wmat not winf)
-#  psi_r=20
-#  params@psi[] <- unlist(tapply(params@w,1:length(params@w),function(wx,Winf,Wmat,n){
-#    ((1 + (wx/(Wmat))^-psi_r)^-1) * (wx/Winf)^(1-n)},Winf=params@species_params$w_inf,Wmat=params@species_params$w_mat,n=params@n))
-# # # Set w < 1% of Wmat to 0
-#  params@psi[unlist(tapply(params@w,1:length(params@w),function(wx,Wmat)wx<(Wmat*0.01),Wmat=params@species_params$w_mat))] <- 0
-# # # Set all m > M to 1 # Check this is right...
-#  params@psi[unlist(tapply(params@w,1:length(params@w),function(wx,Winf)(wx/Winf)>1,Winf=params@species_params$w_inf))] <- 1
-#  
-# ########## erepro
-#  
-#  #and erepro - should this decline with Winf or shoudl it just be a very small number 0.005?
-# #should this actually be closer to 1 for mammals?
-# params@species_params$erepro <-0.05*params@species_params$w_inf^(-0.75)
-# # need to think about how this sounds in writing
-# 
-# ######### juvenile mortality
-# 
-# ## add declining intraspecific juvenile mortality to background mortality 
-# for (i in 1: length(params@species_params$species)) params@mu_b[i,] <- params@mu_b[i,]  + 0.1*params@w^-0.25
-# 
+<!-- ####### feeding kernels - use box kernels for planktovores instead? -->
+<!-- params<-mf.params -->
 
+<!-- #new predation kernel varies with pred size and species but is the same for all prey species, need to fill this in with values, according to Ryans' code -->
+<!-- pred_kern <- array(0, dim=c(length(params@species_params$species),length(params@w),length(params@w_full)),dimnames=list(params@species_params$species,params@w,params@w_full)) -->
 
-```
+<!-- #### change the feeding kernel -->
+<!-- pred_kern[]<- mf.params@species_params$beta -->
 
-Let's take a look now.
-```{r}
-  
-params<- setParams(params, pred_kernel = pred_kern,kappa=1e6)
+<!-- #mvals<-groups$m ### need to enter these manually as removed from file because of new m parameter in mizer setparams function -->
+<!-- #shift over microzoop -->
+<!-- #mvals[1]<--2 -->
 
-# run again, intialised from the final state above
-new.mf<-project(params,t_max=100,initial_n=sim@n[500,,],initial_n_pp=sim@n_pp[500,])
+<!-- mvals <-c( -->
+<!-- NA, -->
+<!-- 0.73, -->
+<!-- NA, -->
+<!-- NA, -->
+<!-- NA, -->
+<!-- NA, -->
+<!-- NA, -->
+<!-- NA, -->
+<!-- NA, -->
+<!-- NA, -->
+<!-- 1.5) -->
 
-#plot(new.mf)
 
-# run again for longer, from the final state above
-#new.mf<-project(params,t_max=500,initial_n=new.mf@n[100,,],initial_n_pp=new.mf@n_pp[100,])
-   
-plot(new.mf)  
-plotlyFeedingLevel(new.mf)  
-plotlyGrowthCurves(new.mf,percentage = T) 
-plotlyBiomass(new.mf,percentage = T) 
-plotBioData(new.mf,dat)
+<!-- ### Ryan's feeding kernel: -->
+<!-- for (i in 1:length(mvals)) { -->
 
-```
+<!--   D.z <- 2*(3*params@w*1e12/(4*pi))^(1/3) # convert body mass g to ESD (um) -->
+<!--   betas =  (exp(0.02*log(D.z)^2 - mvals[i] + 1.832))^3 -->
 
-That helps baleen whales - and impact macrozoooplankton, but some of the predator groups are still not getting enough food.
+<!--   if (!is.na(mvals[i])) pred_kern[i,,]<- betas -->
 
-### Prey size selection
+<!-- } -->
+<!--   pred_kern[]<-exp(-0.5*sweep(log(sweep(sweep(pred_kern,3,params@w_full,"*")^-1,2,params@w,"*")),1,params@species_params$sigma,"/")^2) -->
+<!--   pred_kern[] <- sweep(pred_kern,c(2,3),combn(params@w_full,1,function(x,w)x<params@w,w=params@w),"*") # find out the untrues and then multiply -->
 
-What range of values should the seabirds have - should we use a box kernel for those groups? I seem to remember there are distinct size ranges for the different seabirds.
+<!-- ##### box feeding kernel for baleen whales   -->
 
-### Metabolic costs
 
-Are these correct for the different groups? What about the maximum intake rate coefficients - h? Do these sclae in the way that is expected for endotherms?
 
-### Maturation and reproduction
 
-We need to check the assumptions about maturation and reproduction for the non-fish groups.
+<!-- ####### psi function -->
 
-The marine mammals and seabirds show stop growth once they reach maturation size. Need to make sure some functioanl groups are not mixtures of these type of taxa. Therefore matruation size and asymptotic size are very close. They should probably alos follow a sharp transition to maturation size, as they follow determinate growth.
+<!-- #   # Change allocation to reproduction = check for endotherms/determinate growers (should be 1 at wmat not winf) -->
+<!-- #  psi_r=20 -->
+<!-- #  params@psi[] <- unlist(tapply(params@w,1:length(params@w),function(wx,Winf,Wmat,n){ -->
+<!-- #    ((1 + (wx/(Wmat))^-psi_r)^-1) * (wx/Winf)^(1-n)},Winf=params@species_params$w_inf,Wmat=params@species_params$w_mat,n=params@n)) -->
+<!-- # # # Set w < 1% of Wmat to 0 -->
+<!-- #  params@psi[unlist(tapply(params@w,1:length(params@w),function(wx,Wmat)wx<(Wmat*0.01),Wmat=params@species_params$w_mat))] <- 0 -->
+<!-- # # # Set all m > M to 1 # Check this is right... -->
+<!-- #  params@psi[unlist(tapply(params@w,1:length(params@w),function(wx,Winf)(wx/Winf)>1,Winf=params@species_params$w_inf))] <- 1 -->
+<!-- #   -->
+<!-- # ########## erepro -->
+<!-- #   -->
+<!-- #  #and erepro - should this decline with Winf or shoudl it just be a very small number 0.005? -->
+<!-- # #should this actually be closer to 1 for mammals? -->
+<!-- # params@species_params$erepro <-0.05*params@species_params$w_inf^(-0.75) -->
+<!-- # # need to think about how this sounds in writing -->
+<!-- #  -->
+<!-- # ######### juvenile mortality -->
+<!-- #  -->
+<!-- # ## add declining intraspecific juvenile mortality to background mortality  -->
+<!-- # for (i in 1: length(params@species_params$species)) params@mu_b[i,] <- params@mu_b[i,]  + 0.1*params@w^-0.25 -->
+<!-- #  -->
 
-Density dependence: Erepro, Rmax.
 
-Should we change the reproduction function to not use the stock-recruitmnet assumption? There are other options now:https://sizespectrum.org/mizer/reference/index.html#section-density-dependent-reproduction
+<!-- ``` -->
 
+<!-- Let's take a look now. -->
+<!-- ```{r} -->
 
-### Starvation mortality
+<!-- params<- setParams(params, pred_kernel = pred_kern,kappa=1e6) -->
 
-Should we include startvation morality ? This would free up competition for resources....
+<!-- # run again, intialised from the final state above -->
+<!-- new.mf<-project(params,t_max=100,initial_n=sim@n[500,,],initial_n_pp=sim@n_pp[500,]) -->
 
+<!-- #plot(new.mf) -->
 
+<!-- # run again for longer, from the final state above -->
+<!-- #new.mf<-project(params,t_max=500,initial_n=new.mf@n[100,,],initial_n_pp=new.mf@n_pp[100,]) -->
 
-### Other sources of mortality
+<!-- plot(new.mf)   -->
+<!-- plotlyFeedingLevel(new.mf)   -->
+<!-- plotlyGrowthCurves(new.mf,percentage = T)  -->
+<!-- plotlyBiomass(new.mf,percentage = T)  -->
+<!-- plotBioData(new.mf,dat) -->
 
-Currently assumong a fairly low backgournd "other" moratlity that is constant within fucntioan group but declines with aymptotic size (Brown et al. 2004). Sensescence mortality has been used in other work, but is tricky to parameterise. Though this might be needed for squid or other life histories that dies after reproduction.
+<!-- ``` -->
 
-### Plankton dynamics
+<!-- That helps baleen whales - and impact macrozoooplankton, but some of the predator groups are still not getting enough food. -->
 
-Currently we use the default plankton dynamics and parameter values. What should these be for the Southern Ocean? Do we have any information from regional shelf sea biogeochmical models? The previous information of satellite data seem limited. 
+<!-- ### Prey size selection -->
 
-So, we decided to ask the question: What does the plankton need to be to feed the rest of the size spectrum (at equlibrium)? Does anyone have size spectrum slopes and intercepts for this system? (Angus Atkinson?)
+<!-- What range of values should the seabirds have - should we use a box kernel for those groups? I seem to remember there are distinct size ranges for the different seabirds. -->
 
-However, we could also incude stochasticity...more work though example here: https://rpubs.com/gustav/plankton-anchovy
+<!-- ### Metabolic costs -->
 
-Samik Datta and I have also looked at seasonality - hopefully will build extension, but how important for this?
+<!-- Are these correct for the different groups? What about the maximum intake rate coefficients - h? Do these sclae in the way that is expected for endotherms? -->
 
-# Model Calibration 
+<!-- ### Maturation and reproduction -->
 
-WARNING: BELOW IS UNFINISHED AND DOES NOT CURRENTLY WORK. SHOULD WE START SIMPLER BASIC CALIBRATION ? I HAVE NOT WORKED OUT  MIKE'S METHOD YET.
+<!-- We need to check the assumptions about maturation and reproduction for the non-fish groups. -->
 
-Rather than continue to manually adjust and tune the parameters we will try to automatically calibrate the model with data and estimate our uncertain parameters. We are particularly uncertian about: kappa ( the satellite data used as  inputs does not appear to be enough to keep the zooplankton  grooups alive), Rmax( this will influence the biomass of each group) Here, we will use an inverse calibraion where we have population level biomass density data for 6 of the marine mammal and seabird groups (obtained from the inputs for an EcoPath model). 
+<!-- The marine mammals and seabirds show stop growth once they reach maturation size. Need to make sure some functioanl groups are not mixtures of these type of taxa. Therefore matruation size and asymptotic size are very close. They should probably alos follow a sharp transition to maturation size, as they follow determinate growth. -->
 
-```{r}
-# Step 0. Set up function to run model and output the predicted log biomasses
+<!-- Density dependence: Erepro, Rmax. -->
 
-runmodel<-function(theta,parms=params,delta_t=0.1){# set up and run!
-# change the paramters values that we want to estimate/calibrate
-parms@species_params$R_max<- theta[1]*parms@species_params$w_inf^theta[2]
-kappa <- theta[3]
-backmort <- theta[4]
-parms<-setParams(parms,kappa=kappa,z0pre = backmort)
-#parms<- setPredKernel(parms, pred_kernel)
-sim<- project(parms,dt=delta_t,t_max = 100)
-# output the biomass denisty in terms of tonnes per km2
-# assume model is set up for an area of 1km2
-# this will output the biomass at last time step - do we need a time-average?
-sim_logbiomass<-log(getBiomass(sim)[dim(sim@n)[1],]) - log(1e6)
-return(sim_logbiomass)
-# do we also want to pass the equilibrium n and n_pp from last iteration?
-}
-#test-run
+<!-- Should we change the reproduction function to not use the stock-recruitmnet assumption? There are other options now:https://sizespectrum.org/mizer/reference/index.html#section-density-dependent-reproduction -->
 
-theta <- c(1e2,-1.5,1e5,0.1)
-runmodel(theta = theta,parms=mf.params)
-```
 
+<!-- ### Starvation mortality -->
 
-```{r}
-# set up error function to compare predictions with observations (only need range of observations)
-dat<-log(c(rep(NA,4),0.003451, 0.015580,NA,NA,0.258995,0.008246,0.021900,0.141530))
-names(dat) <-params@species_params$species
+<!-- Should we include startvation morality ? This would free up competition for resources.... -->
 
-sse <- function(theta, params=params,dat=dat) {
-pred <- runmodel(theta,params)
-# sum of squared errors, here on log-scale of predictions and data (can change this)
-discrep <- pred[!is.na(dat)] - dat[!is.na(dat)]
-return(sum(discrep^2))
-}
-err<-sse(theta,mf.params,dat)
-#test
-err
-```
 
 
+<!-- ### Other sources of mortality -->
 
+<!-- Currently assumong a fairly low backgournd "other" moratlity that is constant within fucntioan group but declines with aymptotic size (Brown et al. 2004). Sensescence mortality has been used in other work, but is tricky to parameterise. Though this might be needed for squid or other life histories that dies after reproduction. -->
 
-We could skip ahead to  optimisation here to simply find the "best" single parameter values given the model and the data. Or carry out more advance Bayeisan methods. Instead, to illustrate how this works and to examine the error surface, we will set up a simple grid of parameters. Because the models runs are not actually dependent on each other (they are sequential), we can also do this much more quickly with parallel computing. 
+<!-- ### Plankton dynamics -->
 
-```{r}
+<!-- Currently we use the default plankton dynamics and parameter values. What should these be for the Southern Ocean? Do we have any information from regional shelf sea biogeochmical models? The previous information of satellite data seem limited.  -->
 
+<!-- So, we decided to ask the question: What does the plankton need to be to feed the rest of the size spectrum (at equlibrium)? Does anyone have size spectrum slopes and intercepts for this system? (Angus Atkinson?) -->
 
-# below not working
+<!-- However, we could also incude stochasticity...more work though example here: https://rpubs.com/gustav/plankton-anchovy -->
 
+<!-- Samik Datta and I have also looked at seasonality - hopefully will build extension, but how important for this? -->
 
+<!-- # Model Calibration  -->
 
-# two parameter grid
-kappa <- seq(from=0.05,to=0.1,by=0.05)
-effort <- seq(from=0,to=2,by=0.1)
-grid <- expand.grid(kappa=kappa,effort=effort)
-grid$SSE <- apply(grid,1,f)
+<!-- WARNING: BELOW IS UNFINISHED AND DOES NOT CURRENTLY WORK. SHOULD WE START SIMPLER BASIC CALIBRATION ? I HAVE NOT WORKED OUT  MIKE'S METHOD YET. -->
 
+<!-- Rather than continue to manually adjust and tune the parameters we will try to automatically calibrate the model with data and estimate our uncertain parameters. We are particularly uncertian about: kappa ( the satellite data used as  inputs does not appear to be enough to keep the zooplankton  grooups alive), Rmax( this will influence the biomass of each group) Here, we will use an inverse calibraion where we have population level biomass density data for 6 of the marine mammal and seabird groups (obtained from the inputs for an EcoPath model).  -->
 
+<!-- ```{r} -->
+<!-- # Step 0. Set up function to run model and output the predicted log biomasses -->
 
-#optimisation
-vals<-optim(par=c(1e3,0.1),sse,method ="SANN")
+<!-- runmodel<-function(theta,parms=params,delta_t=0.1){# set up and run! -->
+<!-- # change the paramters values that we want to estimate/calibrate -->
+<!-- parms@species_params$R_max<- theta[1]*parms@species_params$w_inf^theta[2] -->
+<!-- kappa <- theta[3] -->
+<!-- backmort <- theta[4] -->
+<!-- parms<-setParams(parms,kappa=kappa,z0pre = backmort) -->
+<!-- #parms<- setPredKernel(parms, pred_kernel) -->
+<!-- sim<- project(parms,dt=delta_t,t_max = 100) -->
+<!-- # output the biomass denisty in terms of tonnes per km2 -->
+<!-- # assume model is set up for an area of 1km2 -->
+<!-- # this will output the biomass at last time step - do we need a time-average? -->
+<!-- sim_logbiomass<-log(getBiomass(sim)[dim(sim@n)[1],]) - log(1e6) -->
+<!-- return(sim_logbiomass) -->
+<!-- # do we also want to pass the equilibrium n and n_pp from last iteration? -->
+<!-- } -->
+<!-- #test-run -->
 
-# two parameter grid
-kappa <- seq(from=0.05,to=0.1,by=0.05)
-mort <- seq(from=0,to=2,by=0.1)
-grid <- expand.grid(kappa=kappa,mort=mort)
-grid$SSE <- apply(grid,1,sse)
+<!-- theta <- c(1e2,-1.5,1e5,0.1) -->
+<!-- runmodel(theta = theta,parms=mf.params) -->
+<!-- ``` -->
 
 
-```
+<!-- ```{r} -->
+<!-- # set up error function to compare predictions with observations (only need range of observations) -->
+<!-- dat<-log(c(rep(NA,4),0.003451, 0.015580,NA,NA,0.258995,0.008246,0.021900,0.141530)) -->
+<!-- names(dat) <-params@species_params$species -->
 
+<!-- sse <- function(theta, params=params,dat=dat) { -->
+<!-- pred <- runmodel(theta,params) -->
+<!-- # sum of squared errors, here on log-scale of predictions and data (can change this) -->
+<!-- discrep <- pred[!is.na(dat)] - dat[!is.na(dat)] -->
+<!-- return(sum(discrep^2)) -->
+<!-- } -->
+<!-- err<-sse(theta,mf.params,dat) -->
+<!-- #test -->
+<!-- err -->
+<!-- ``` -->
 
 
-###### Bayesian in a week
 
 
-```{r}
-## Step 1. generate parameter sets to sample and plug in to model
-library(randtoolbox)
-library(boot)
-#### generate Round  1
-theta <- sobol(n = 20000, dim = 26)
-for(i in 1:12){
-  # Rmax
-  theta[,i] <- c(10,10,14,18,12,10,14,15)+ theta[,i] * c(20,19,16,13,18,20,16,15)
-}
-  #erepro
-for(i in 13:24){
-  theta[,i] <-  inv.logit(-5 + theta[,i] * 5)
-}
- #kappa
-theta[,25] <- 5 + theta[,25] * 25
+<!-- We could skip ahead to  optimisation here to simply find the "best" single parameter values given the model and the data. Or carry out more advance Bayeisan methods. Instead, to illustrate how this works and to examine the error surface, we will set up a simple grid of parameters. Because the models runs are not actually dependent on each other (they are sequential), we can also do this much more quickly with parallel computing.  -->
 
- #background mort
-theta[,26] <- inv.logit(-5 + theta[,26] * 5)
+<!-- ```{r} -->
 
 
-```
+<!-- # below not working -->
 
 
 
-```{r}
-#### Run Model (could set up on cluster, but nice to have prgress bar)
+<!-- # two parameter grid -->
+<!-- kappa <- seq(from=0.05,to=0.1,by=0.05) -->
+<!-- effort <- seq(from=0,to=2,by=0.1) -->
+<!-- grid <- expand.grid(kappa=kappa,effort=effort) -->
+<!-- grid$SSE <- apply(grid,1,f) -->
 
-library(pbapply)
-round_1 <-  pbapply(theta,1,runmodel, parms)
-save(theta,round_1,file="data/round1.Rdata")
 
-```
 
-```{r}
-# set up error function to compare predictions with observations (only need range of observations)
-## Calculate the difference between the simulated catches and the observations. plot the results
-load("data/round1.Rdata")
-difs<- pbsapply(1:nrow(theta),function(x){colSums((matrix(round_1[,x],ncol=8) - log(dat[,-1]))^2,na.rm=T)})
+<!-- #optimisation -->
+<!-- vals<-optim(par=c(1e3,0.1),sse,method ="SANN") -->
 
+<!-- # two parameter grid -->
+<!-- kappa <- seq(from=0.05,to=0.1,by=0.05) -->
+<!-- mort <- seq(from=0,to=2,by=0.1) -->
+<!-- grid <- expand.grid(kappa=kappa,mort=mort) -->
+<!-- grid$SSE <- apply(grid,1,sse) -->
 
-```
 
-```{r}
-# build emulator on diffs
-```
+<!-- ``` -->
 
 
-```{r}
-# sample and cheick params work
-```
 
+<!-- ###### Bayesian in a week -->
 
-```{r}
-# MCMC - posterior
-```
 
+<!-- ```{r} -->
+<!-- ## Step 1. generate parameter sets to sample and plug in to model -->
+<!-- library(randtoolbox) -->
+<!-- library(boot) -->
+<!-- #### generate Round  1 -->
+<!-- theta <- sobol(n = 20000, dim = 26) -->
+<!-- for(i in 1:12){ -->
+<!--   # Rmax -->
+<!--   theta[,i] <- c(10,10,14,18,12,10,14,15)+ theta[,i] * c(20,19,16,13,18,20,16,15) -->
+<!-- } -->
+<!--   #erepro -->
+<!-- for(i in 13:24){ -->
+<!--   theta[,i] <-  inv.logit(-5 + theta[,i] * 5) -->
+<!-- } -->
+<!--  #kappa -->
+<!-- theta[,25] <- 5 + theta[,25] * 25 -->
 
-```{r}
-# resample posterior and compare emulator wth mizer (get importance weightings)
-```
+<!--  #background mort -->
+<!-- theta[,26] <- inv.logit(-5 + theta[,26] * 5) -->
 
 
-```{r}
-# resample posterior accordingto weights & run mize scenarios
-```
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+<!-- #### Run Model (could set up on cluster, but nice to have prgress bar) -->
+
+<!-- library(pbapply) -->
+<!-- round_1 <-  pbapply(theta,1,runmodel, parms) -->
+<!-- save(theta,round_1,file="data/round1.Rdata") -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- # set up error function to compare predictions with observations (only need range of observations) -->
+<!-- ## Calculate the difference between the simulated catches and the observations. plot the results -->
+<!-- load("data/round1.Rdata") -->
+<!-- difs<- pbsapply(1:nrow(theta),function(x){colSums((matrix(round_1[,x],ncol=8) - log(dat[,-1]))^2,na.rm=T)}) -->
+
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- # build emulator on diffs -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # sample and cheick params work -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # MCMC - posterior -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # resample posterior and compare emulator wth mizer (get importance weightings) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # resample posterior accordingto weights & run mize scenarios -->
+<!-- ``` -->
