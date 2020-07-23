@@ -1,4 +1,4 @@
-species,Type,FeedType,Prop,w_min,w_inf,w_mat,SearchCoef,SearchExp,PPMRscale,PPMR,FeedWidth,GrossGEscale,Carbon,Repro,PlotColour
+species,Type,FeedType,Prop,w_min,w_inf,w_mat,gamma,q,PPMRscale,PPMR,FeedWidth,GrossGEscale,Carbon,Repro,PlotColour
 Flagellates,Zooplankton,Heterotroph,0.1,-10.7,-6.8,-8.8,640,0.8,1.5,NA,0.36,2.5,0.15,0,seagreen3
 Ciliates,Zooplankton,Heterotroph,0.1,-9.3,-6.3,-8.3,640,0.8,0.04,NA,0.47,2.5,0.15,0,seagreen4
 Larvaceans,Zooplankton,FilterFeeder,0.1,-6.4,-3.2,-5.2,640,0.8,-3,NA,0.7,2.5,0.02,0,lightgoldenrod4

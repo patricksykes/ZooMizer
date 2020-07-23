@@ -60,7 +60,7 @@ groups <-read.csv("data/TestGroups_mizer.csv")
 groups$w_min <- 10^groups$w_min #convert from log10 values
 groups$w_inf <- 10^groups$w_inf
 groups$w_mat <- 10^groups$w_mat
-groups$h <- 100 #maximum feeding level - very large value to reflect the unlimited feeding implicitly allowed in ZooMSS
+groups$h <- 100000 #maximum feeding level - very large value to reflect the unlimited feeding implicitly allowed in ZooMSS
 
 #groups <- readRDS("data/groups.RDS")[-1,]
 #check fails these tests:
@@ -88,17 +88,17 @@ TODO: adjust parameters here.
 
 mf.params <- newMultispeciesParams(species_params=groups,
                                    interaction=NULL, #NULL sets all to 1
-                                   no_w = 100,
-                                   kappa = 1e15, #set huge to recreate unbounded feeding in ZooMSS
-                                   min_w_pp = 10^(-14.5),
-                                   w_pp_cutoff = 10^(-8),
-                                   r_pp = 20,
-                                   n = 0.7,
-                                   z0pre = 1,
+                                   no_w = 178, #number of zoo+fish size classes;
+                                   kappa = 1e15, #set huge to recreate unbounded feeding on phyto in ZooMSS
+                                   min_w_pp = 10^(-14.5), #minimum phyto size
+                                   w_pp_cutoff = 10^(-8), #maximum phyto size
+                                   r_pp = 20, #Coefficient of the intrinsic resource birth rate, set large for now
+                                   n = 0.7, #The allometric growth exponent used in ZooMSS
+                                   z0pre = 1, #external mortality
                                    z0exp = 0.3,
                                    resource_dynamics = "resource_constant",
                                    #RDD = constantRDD(species_params = groups) #first go at this
-                                   #pred_kernel = ... #probably easiest to just import this
+                                   #pred_kernel = ... #probably easiest to just import this/pre-calculate it, once dimensions are worked out
 )
 
 # # mf.params@species_params$metab[1] <-0.01
@@ -147,7 +147,7 @@ sim <- project(mf.params, t_max=500,dt = 0.1)
 plot(sim)
 #plotlyGrowthCurves(sim,species="macrozooplankton")
 plotlyFeedingLevel(sim)
-# feeding level satioation for some groups, except for the seabirds
+# feeding level satiation for some groups, except for the seabirds
 # macrozooplankton - they are not growing enough,why?
 #tuneParams(mf.params)
 plotlyGrowthCurves(sim,percentage = T)
