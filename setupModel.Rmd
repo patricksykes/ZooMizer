@@ -85,21 +85,37 @@ We will pass these parameters to mizer to set up a new multispecies model.
 TODO: adjust parameters here.
 
 ```{r}
+#setup temp effects
+
+ID <- 123 #index of environmental data to choose
+enviro_row <- readRDS("data/envirofull_20200317.RDS")[ID,]
+
+#set up the fixed phyoplankton spectrum
+phyto_fixed <- function(params, n, n_pp, n_other, rates, dt = 0.1, phyto_int = enviro_row$phyto_int, phyto_slope = enviro_row$phyto_slope,...) {
+    n_pp <- 10^(phyto_int)*(params@w_full^(phyto_slope)) #returns the fixed spectrum at every time step
+    n_pp[params@w_full>params@resource_params$w_pp_cutoff] <- 0
+    return(n_pp)
+}
+
 
 mf.params <- newMultispeciesParams(species_params=groups,
                                    interaction=NULL, #NULL sets all to 1
                                    no_w = 178, #number of zoo+fish size classes;
                                    kappa = 1e15, #set huge to recreate unbounded feeding on phyto in ZooMSS
                                    min_w_pp = 10^(-14.5), #minimum phyto size
-                                   w_pp_cutoff = 10^(-8), #maximum phyto size
+                                   w_pp_cutoff = 10^(enviro_row$phyto_max), #maximum phyto size
                                    r_pp = 20, #Coefficient of the intrinsic resource birth rate, set large for now
                                    n = 0.7, #The allometric growth exponent used in ZooMSS
-                                   z0pre = 1, #external mortality
+                                   z0pre = 0.1, #external mortality
                                    z0exp = 0.3,
-                                   resource_dynamics = "resource_constant",
-                                   #RDD = constantRDD(species_params = groups) #first go at this
+                                   
+
+                                   resource_dynamics = "phyto_fixed",
+                                   RDD = constantRDD(species_params = groups) #first go at this
                                    #pred_kernel = ... #probably easiest to just import this/pre-calculate it, once dimensions are worked out
 )
+
+
 
 # # mf.params@species_params$metab[1] <-0.01
 # mf.params@species_params$h[] <- 10*mf.params@species_params$ks[] 
@@ -143,8 +159,9 @@ mf.params <- newMultispeciesParams(species_params=groups,
 # mf.params<- setParams(mf.params,kappa=1e5) # take the new paramewters and change kappa
 
 
-sim <- project(mf.params, t_max=500,dt = 0.1)
+sim <- project(mf.params, t_max=100,dt = 0.01)
 plot(sim)
+plotlyBiomass(sim)
 #plotlyGrowthCurves(sim,species="macrozooplankton")
 plotlyFeedingLevel(sim)
 # feeding level satiation for some groups, except for the seabirds
