@@ -60,17 +60,15 @@ groups <-read.csv("data/TestGroups_mizer.csv")
 groups$w_min <- 10^groups$w_min #convert from log10 values
 groups$w_inf <- 10^groups$w_inf
 groups$w_mat <- 10^groups$w_mat
-groups$h <- 100000 #maximum feeding level - very large value to reflect the unlimited feeding implicitly allowed in ZooMSS
+groups$h <- 100000 # should be Inf, but breaks. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS
 
 #groups <- readRDS("data/groups.RDS")[-1,]
 #check fails these tests:
-groups$w_mat25 >= groups$w_mat #note we don't have w_mat25. Not sure if it's necessary/desirable. Probably not.
-groups$w_mat25 <= groups$w_min
-groups$w_inf <= groups$w_mat25
+#groups$w_mat25 >= groups$w_mat #note we don't have w_mat25. Not sure if it's necessary/desirable. Probably not.
+groups$w_mat <= groups$w_min
+groups$w_inf <= groups$w_mat
 
-#[-1,]
-#fix one value 
-#groups[7,"w_min"]<-4000
+
 
 # read interaction matrix
 # get the interaction matrix - actually I think we can leave this out. Default is all 1s, which is the same as in ZooMSS. Included for completeness; it may be useful in future to keep this in.
@@ -85,7 +83,7 @@ We will pass these parameters to mizer to set up a new multispecies model.
 TODO: adjust parameters here.
 
 ```{r}
-#setup temp effects
+
 
 ID <- 1 #index of environmental data to choose
 enviro_row <- readRDS("data/envirofull_20200317.RDS")[ID,]
@@ -97,7 +95,6 @@ phyto_fixed <- function(params, n, n_pp, n_other, rates, dt = 0.01, phyto_int = 
     return(n_pp)
 }
 
-
 mf.params <- newMultispeciesParams(species_params=groups,
                                    interaction=NULL, #NULL sets all to 1
                                    no_w = 178, #number of zoo+fish size classes;
@@ -106,9 +103,8 @@ mf.params <- newMultispeciesParams(species_params=groups,
                                    w_pp_cutoff = 10^(enviro_row$phyto_max), #maximum phyto size
                                    r_pp = 20, #Coefficient of the intrinsic resource birth rate, set large for now
                                    n = 0.7, #The allometric growth exponent used in ZooMSS
-                                   z0pre = 0.1, #external mortality
+                                   z0pre = 1, #external mortality (senescence)
                                    z0exp = 0.3,
-                                   
                                    resource_dynamics = "phyto_fixed",
                                    RDD = constantRDD(species_params = groups) #first go at this
                                    #pred_kernel = ... #probably easiest to just import this/pre-calculate it, once dimensions are worked out
@@ -118,49 +114,88 @@ mf.params <- newMultispeciesParams(species_params=groups,
 length(which(mf.params@initial_n_pp>0)) == length(seq(-14.5,enviro_row$phyto_max, by = 0.1))
 
 
-# # mf.params@species_params$metab[1] <-0.01
-# mf.params@species_params$h[] <- 10*mf.params@species_params$ks[] 
-# 
-# # mf.params@species_params$gamma[1] <- 1000*(mf.params@species_params$gamma[1])
-# mf.params@species_params$alpha[] <- 0.6
-# #mf.params@species_params$z0[1] <- 0.01
-# 
-# #higher mean betas
-#  mf.params@species_params$beta[mf.params@species_params$species == "large.divers"] <-6000
-#  mf.params@species_params$beta[mf.params@species_params$species == "apex.predators"] <-1000
-# # # wider feeding kernels
-#  mf.params@species_params$sigma[] <- 2
-#  mf.params@species_params$sigma[mf.params@species_params$species == "baleen.whales"] <- 4
-# 
-# 
-# # mf.params@species_params$w_mat25[1] <- 0.005*mf.params@species_params$w_inf[1]
-# mf.params@species_params$erepro <- ifelse(mf.params@species_params$erepro==1,0.001,mf.params@species_params$erepro)
-# 
-# # mf.params@interaction[] <-0.1
-# #mf.params@interaction[,1] <-0
-# #mf.params@interaction[1,1] <-1
-# 
-# #mf.params@species_params$interaction_p[2:11] <-0.5
-# 
-# # hand tuning to gte in line with data
-# mf.params@species_params$R_max <- 10*mf.params@species_params$R_max
-# 
-# 
-# # needs to be very different for marine mammals? use different repro assumptions (fixed offspring density per year)?
-# 
-# 
-# 
-# # mf.params@species_params$w_mat <- 0.5*mf.params@species_params$w_inf
-# # mf.params@species_params$w_mat[mf.params@species_params$species == "flying.birds"] <- 0.75*mf.params@species_params$w_inf[mf.params@species_params$species == "flying.birds"]
-# # mf.params@species_params$w_mat[mf.params@species_params$species == "small.divers"] <- 0.75*mf.params@species_params$w_inf[mf.params@species_params$species == "small.divers"]
-# # mf.params@species_params$w_mat[mf.params@species_params$species == "medium.divers"] <- 0.75*mf.params@species_params$w_inf[mf.params@species_params$species == "medium.divers"]
-# # mf.params@species_params$w_mat[10:12] <- 0.75*mf.params@species_params$w_inf[10:12]
-# # setParams(mf.params)
-# 
-# mf.params<- setParams(mf.params,kappa=1e5) # take the new paramewters and change kappa
+```
 
 
-sim <- project(mf.params, t_max=100,dt = 0.01)
+Now do some fiddling to make the new MizerParams object match the ZooMSS parameters. Note: this chunk is adapted from `fZooMSS_setup.R`, found at https://github.com/MathMarEcol/ZooMSS/.
+
+```{r}
+setZooMizerConstants <- function(params, Groups, input_params){
+#### CALCULATES CONSTANT BITS OF THE MODEL FUNCTIONS FOR EACH GROUP
+  SearchVol <- getSearchVolume(params)
+  M_sb <- getExtMort(mf.params)
+  ZSpre <- 1 # senescence mortality prefactor
+  ZSexp <- 0.3 # senescence mortality exponent
+  
+  pred_kernel <- getPredKernel(params)
+  prey_weight_matrix <- matrix(params@w_full, nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
+  pred_weight_matrix <- matrix(params@w, nrow = length(params@w), ncol = length(params@w_full))
+  
+  for(i in 1:nrow(params@species_params)){
+    ## Senescence mortality
+    if(params@species_params$Type[i] == "Zooplankton"){
+      M_sb[i,] <- ZSpre*(params@w/(10^(params@species_params$w_mat[i])))^ZSexp
+      M_sb[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
+      M_sb[i, 10^(params@species_params$w_mat[i]) > params@w] <- 0
+    }
+    
+    if(params@species_params$Type[i] == "Fish"){
+      M_sb[i,] <- 0.1*ZSpre*(params@w/(10^(params@species_params$w_mat[i])))^ZSexp
+      M_sb[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
+      M_sb[i, 10^(params@species_params$w_mat[i]) > params@w] <- 0
+    }
+    
+    ### Search volume
+    SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$gamma[i]))
+    SearchVol[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
+    SearchVol[i, 10^(params@species_params$w_min[i]) > params@w] <- 0
+    
+    ### Predation Kernels
+    if(is.na(params@species_params$PPMRscale[i]) == FALSE){ # If group has an m-value (zooplankton)
+      # Calculate PPMR for zooplankton, which changes according to body-size (Wirtz, 2012)
+      D.z <- 2*(3*params@w*1e12/(4*pi))^(1/3) # convert body mass g to ESD (um)
+      betas <- (exp(0.02*log(D.z)^2 - params@species_params$PPMRscale[i] + 1.832))^3 # Wirtz's equation
+      beta_mat <- matrix(betas, nrow = length(params@w), ncol = length(mf.params@w_full))
+      
+      # Calculate feeding kernels
+      pred_kernel[i, , ] <- exp(-0.5*(log((beta_mat*prey_weight_matrix)/
+                                     pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
+        sqrt(2*pi*params@species_params$FeedWidth[i]^2)
+      # The feeding kernel of filter feeders is not expected to change much with increasing size so we fix it here
+      
+      # if (param$fixed_filterPPMR == TRUE){
+      if(i == 3){
+        pred_kernel[i, , ] <- matrix(pred_kernel[i,44,], nrow = length(params@w), ncol = length(mf.params@w_full), byrow = TRUE)
+      }
+      if(i == 8){
+        pred_kernel[i, , ] <- matrix(pred_kernel[i,61,], nrow = length(params@w), ncol = length(mf.params@w_full), byrow = TRUE)
+      }
+      # }
+      
+    } else { # If group does not have an m-value (fish)
+      beta_mat <- matrix(params@species_params$PPMR[i], nrow = length(params@w), ncol = length(params@w_full))
+      
+      # Calculate feeding kernels
+      pred_kernel[i, , ] <- exp(-0.5*(log((beta_mat*prey_weight_matrix)/
+                                             pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
+        sqrt(2*pi*params@species_params$FeedWidth[i]^2)
+    }
+
+  }
+params <- setExtMort(params, z0 = M_sb)
+params <- setSearchVolume(params, SearchVol)
+params <- setPredKernel(params, pred_kernel)
+}
+
+setZooMizerConstants(mf.params, groups, enviro_row)
+
+
+```
+
+Try running it:
+
+```{r}
+sim <- project(mf.params, t_max=5,dt = 0.01)
 plot(sim)
 plotlyBiomass(sim)
 #plotlyGrowthCurves(sim,species="macrozooplankton")
