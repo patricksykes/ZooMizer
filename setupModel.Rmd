@@ -60,7 +60,7 @@ groups <-read.csv("data/TestGroups_mizer.csv")
 groups$w_min <- 10^groups$w_min #convert from log10 values
 groups$w_inf <- 10^groups$w_inf
 groups$w_mat <- 10^groups$w_mat
-groups$h <- 100000 # should be Inf, but breaks. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS
+groups$h <- 10000000000 # should be Inf, but breaks. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS
 
 #groups <- readRDS("data/groups.RDS")[-1,]
 #check fails these tests:
@@ -182,6 +182,11 @@ setZooMizerConstants <- function(params, Groups, input_params){
     }
 
   }
+  
+  #temperature effect 
+  temp_eff <-  matrix(2.^((input_params$sst - 30)/10), nrow = length(params@species_params$species), ncol = length(params@w))
+  M_sb <- temp_eff * M_sb # Incorporate temp effect on senscence mortality
+  
 params <- setExtMort(params, z0 = M_sb)
 params <- setSearchVolume(params, SearchVol)
 params <- setPredKernel(params, pred_kernel)
