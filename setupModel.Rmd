@@ -25,7 +25,7 @@ library(devtools)
 library(mizer)
 require(tidyverse)
 
-remotes::install_github("sizespectrum/mizerExperimental")
+#remotes::install_github("sizespectrum/mizerExperimental")
 library(mizerExperimental)
 
 ```
