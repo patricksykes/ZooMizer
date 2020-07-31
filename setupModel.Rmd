@@ -60,7 +60,8 @@ groups <-read.csv("data/TestGroups_mizer.csv")
 groups$w_min <- 10^groups$w_min #convert from log10 values
 groups$w_inf <- 10^groups$w_inf
 groups$w_mat <- 10^groups$w_mat
-groups$h <- 10000000000 # should be Inf, but breaks. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS
+groups$h <- 1e50 # should be Inf, but that breaks the calculations. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS
+
 
 #groups <- readRDS("data/groups.RDS")[-1,]
 #check fails these tests:
@@ -89,8 +90,8 @@ ID <- 1 #index of environmental data to choose
 enviro_row <- readRDS("data/envirofull_20200317.RDS")[ID,]
 
 #set up the fixed phyoplankton spectrum
-phyto_fixed <- function(params, n, n_pp, n_other, rates, dt = 0.01, phyto_int = enviro_row$phyto_int, phyto_slope = enviro_row$phyto_slope,...) {
-    n_pp <- 10^(phyto_int)*(params@w_full^(phyto_slope)) #returns the fixed spectrum at every time step
+phyto_fixed <- function(params, n, n_pp, n_other, rates, dt = 0.01, kappa = 10^enviro_row$phyto_int, lambda = 1-enviro_row$phyto_slope,...) {
+    n_pp <- kappa*params@w_full^(-lambda) #returns the fixed spectrum at every time step
     n_pp[params@w_full>params@resource_params$w_pp_cutoff] <- 0
     return(n_pp)
 }
@@ -98,14 +99,15 @@ phyto_fixed <- function(params, n, n_pp, n_other, rates, dt = 0.01, phyto_int = 
 mf.params <- newMultispeciesParams(species_params=groups,
                                    interaction=NULL, #NULL sets all to 1
                                    no_w = 178, #number of zoo+fish size classes;
-                                   kappa = 1e15, #set huge to recreate unbounded feeding on phyto in ZooMSS
                                    min_w_pp = 10^(-14.4), #minimum phyto size. Note use -14.4, not -14.5, otherwise it makes an extra size class
                                    w_pp_cutoff = 10^(enviro_row$phyto_max), #maximum phyto size
-                                   r_pp = 20, #Coefficient of the intrinsic resource birth rate, set large for now
+                                   #r_pp = 20, #Coefficient of the intrinsic resource birth rate, set large for now
                                    n = 0.7, #The allometric growth exponent used in ZooMSS
                                    z0pre = 1, #external mortality (senescence)
                                    z0exp = 0.3,
                                    resource_dynamics = "phyto_fixed",
+                                   kappa = 10^(enviro_row$phyto_int), 
+                                   lambda = -enviro_row$phyto_slope+1,
                                    RDD = constantRDD(species_params = groups) #first go at this
                                    #pred_kernel = ... #probably easiest to just import this/pre-calculate it, once dimensions are worked out
 )
@@ -190,6 +192,7 @@ setZooMizerConstants <- function(params, Groups, input_params){
 params <- setExtMort(params, z0 = M_sb)
 params <- setSearchVolume(params, SearchVol)
 params <- setPredKernel(params, pred_kernel)
+
 }
 
 setZooMizerConstants(mf.params, groups, enviro_row)
@@ -200,7 +203,10 @@ setZooMizerConstants(mf.params, groups, enviro_row)
 Try running it:
 
 ```{r}
-sim <- project(mf.params, t_max=5,dt = 0.01)
+
+mf.params <- setParams(mf.params)
+
+sim <- project(mf.params, t_max=100,dt = 0.01)
 plot(sim)
 plotlyBiomass(sim)
 #plotlyGrowthCurves(sim,species="macrozooplankton")
