@@ -61,7 +61,8 @@ groups$w_min <- 10^groups$w_min #convert from log10 values
 groups$w_inf <- 10^groups$w_inf
 groups$w_mat <- 10^groups$w_mat
 groups$h <- 1e50 # should be Inf, but that breaks the calculations. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS
-
+groups$ks <- 0 #turn off standard metabolism
+#todo - ramp up constant repro for coexistence
 
 #groups <- readRDS("data/groups.RDS")[-1,]
 #check fails these tests:
@@ -97,11 +98,10 @@ phyto_fixed <- function(params, n, n_pp, n_other, rates, dt = 0.01, kappa = 10^e
 }
 
 mf.params <- newMultispeciesParams(species_params=groups,
-                                   interaction=NULL, #NULL sets all to 1
+                                   interaction=NULL, #NULL sets all to 1, no strict herbivores
                                    no_w = 178, #number of zoo+fish size classes;
-                                   min_w_pp = 10^(-14.4), #minimum phyto size. Note use -14.4, not -14.5, otherwise it makes an extra size class
-                                   w_pp_cutoff = 10^(enviro_row$phyto_max), #maximum phyto size
-                                   #r_pp = 20, #Coefficient of the intrinsic resource birth rate, set large for now
+                                   min_w_pp = 10^(-14.4), #minimum phyto size. Note: use -14.4, not -14.5, otherwise it makes an extra size class
+                                   w_pp_cutoff = 10^(enviro_row$phyto_max), #maximumplot phyto size
                                    n = 0.7, #The allometric growth exponent used in ZooMSS
                                    z0pre = 1, #external mortality (senescence)
                                    z0exp = 0.3,
@@ -207,7 +207,7 @@ Try running it:
 mf.params <- setParams(mf.params)
 
 sim <- project(mf.params, t_max=100,dt = 0.01)
-plot(sim)
+plot(sim) #note feeding level means satiation - 0 since there's no satiation in this model.
 plotlyBiomass(sim)
 #plotlyGrowthCurves(sim,species="macrozooplankton")
 plotlyFeedingLevel(sim)
@@ -219,128 +219,145 @@ plotlySpectra(sim)
 ```
 
 
------Old stuff only below this line-----
+Next thing to do is reproduction. In ZooMSS, this is handled by simply setting the abundance in the smallest size class to be a fixed proportion of the community size spectrum; in short
+
+$$ N_i(w_{min}(i)) = prop(i) \sum_{j \neq i} N_j(w_{min}(i)),$$
+where $N_i(w)$ is the density of species $i$ in weight class $w$, and $prop(i)$ is a (fixed) proportion depending on the species.
+
+In mizer, reproduction is linked to metabolism. The abundance in the smallest size class is proportional to the energy available to mature individuals for reproduction - i.e. the energy left over after subtracting metabolic costs (including energy to support growth) from the energy assimilated (by mature individuals) from feeding on prey.
+
+Now, to recreate this in mizer, we need to rewrite mizer's `project_simple()` function. We do this by making a new function, `new_project_simple()`, and using it in place of the default one:
+
+```{r}
+new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps, 
+                           effort, resource_dynamics_fn, other_dynamics_fns,
+                           rates_fns, ...) {    
+    # Handy things
+    no_sp <- nrow(params@species_params) # number of species
+    no_w <- length(params@w) # number of fish size bins
+    idx <- 2:no_w
+    w_max_idx <- params@w_min_idx
+    for (i in 1:length(w_max_idx)) {
+     w_max_idx[i] <- which(round(log10(params@w),2)==round(log10(params@species_params$w_inf[i]),2)) 
+    }
+    
+    # Hacky shortcut to access the correct element of a 2D array using 1D notation
+    # This references the egg size bracket for all species, so for example
+    # n[w_min_idx_array_ref] = n[,w_min_idx]
+    w_min_idx_array_ref <- (params@w_min_idx - 1) * no_sp + (1:no_sp)
+    # Matrices for solver
+    a <- matrix(0, nrow = no_sp, ncol = no_w)
+    b <- matrix(0, nrow = no_sp, ncol = no_w)
+    S <- matrix(0, nrow = no_sp, ncol = no_w)
+    
+    for (i_time in 1:steps) {
+        r <- rates_fns$Rates(
+            params, n = n, n_pp = n_pp, n_other = n_other,
+            t = t, effort = effort, rates_fns = rates_fns, ...)
+        
+        # Update time
+        t <- t + dt
+        
+        # Update other components
+        n_other_current <- n_other  # So that the resource dynamics can still 
+        # use the current value
+        for (component in names(params@other_dynamics)) {
+            n_other[[component]] <-
+                other_dynamics_fns[[component]](
+                    params,
+                    n = n,
+                    n_pp = n_pp,
+                    n_other = n_other_current,
+                    rates = r,
+                    t = t,
+                    dt = dt,
+                    component = component,
+                    ...
+                )
+        }
+        
+        # Update resource
+        n_pp <- resource_dynamics_fn(params, n = n, n_pp = n_pp,
+                                     n_other = n_other_current, rates = r,
+                                     t = t, dt = dt, ...)
+        
+        # Iterate species one time step forward:
+        # a_{ij} = - g_i(w_{j-1}) / dw_j dt
+        a[, idx] <- sweep(-r$e_growth[, idx - 1, drop = FALSE] * dt, 2,
+                          params@dw[idx], "/")
+        # b_{ij} = 1 + g_i(w_j) / dw_j dt + \mu_i(w_j) dt
+        b[] <- 1 + sweep(r$e_growth * dt, 2, params@dw, "/") + r$mort * dt
+        # S_{ij} <- N_i(w_j)
+        S[,idx] <- n[, idx, drop = FALSE]
+        # Update n
+        # for (i in 1:no_sp) # number of species assumed small, so no need to 
+        #                      vectorize this loop over species
+        #     for (j in (params@w_min_idx[i]+1):no_w)
+        #         n[i,j] <- (S[i,j] - A[i,j]*n[i,j-1]) / B[i,j]
+        # This is implemented via Rcpp
+        n <- inner_project_loop(no_sp = no_sp, no_w = no_w, n = n,
+                                A = a, B = b, S = S,
+                                w_min_idx = params@w_min_idx)
+    }
+        
+        # Update first and last size groups of n
+        #TODO: Make this a little less hacky
+        n[1,1] <- params@species_params$Prop[1]*n_pp[length(params@w_full)-length(params@w)+1]
+        n[1,w_max_idx[1]] <- 0
+        for (i in 2:no_sp) {
+          n[i, w_max_idx[i]] <- 0
+          if(params@species_params$Type[i] != "Fish"){
+            n[i,params@w_min_idx[i]] <- params@species_params$Prop[i] * sum(n[-i,params@w_min_idx[i]])
+            }
+          if(params@species_params$Type[i] == "Fish"){
+            n[i,params@w_min_idx[i]] <- 1/3 * sum(n[1:9,params@w_min_idx[i]])
+            }
+        }
+            
+    return(list(n = n, n_pp = n_pp, n_other = n_other, rates = r))
+}
 
 
-<!-- If we combine the biomassess from the model and add the data to  plot we can look at how close/far we are. -->
+#assign new project function in namespace
+environment(new_project_simple) <- asNamespace('mizer')
+assignInNamespace("project_simple", new_project_simple, ns = "mizer")
+```
+
+
+Now let's try that out:
+
+```{r}
+sim2 <- project(mf.params, t_max = 100, dt = 0.01)
+plot(sim2)
+```
+
+Still missing is the differential prey nutrition based on prey carbon content. We'll do that by editing the `mizerEncounter()` function found in `project_methods.R`, and using `setRateFunction(params, "Encounter", "myEncounter")`. It might be possible to instead edit the chunk above too to incorporate the different method (since we've gone there anyway...)
 
 <!-- ```{r} -->
-<!-- # get biomass and covert to tonnes per area -->
-<!-- plotBioData <- function (sim,dat){ -->
-<!-- simbio<-getBiomass(sim) -->
-<!-- simbio<-data.frame(species=mf.params@species_params$species,w_inf=mf.params@species_params$w_inf,simbio=simbio[100,]/1e6) -->
-
-<!-- simbio<-as.data.frame(merge(simbio,dat,by.x="species",by.y="group",all=T)) -->
-
-<!-- #have a look at plot with both modelled total biomass and observed for top predators -->
-<!-- plot(simbio$w_inf,simbio$simbio,xlab="log Maximum Weight [g]", ylab=" log Total Biomass", log="xy",col="grey", -->
-<!-- pch=16,ylim=c(min(simbio$simbio,simbio$biomass.tperkm2,na.rm=T),max(simbio$simbio,simbio$biomass.tperkm2,na.rm=T))) -->
-<!-- points(simbio$w_inf,simbio$biomass.tperkm2,col="blue",pch=1) -->
-<!-- text(simbio$w_inf,simbio$simbio,labels=simbio$species,cex=0.5) -->
-<!-- return(simbio) -->
-<!-- } -->
-
-<!-- plotBioData(sim,dat) -->
-
-
-<!-- #  -->
-<!-- #  -->
-<!-- # ## have a look at paramters - metabolism -->
-<!-- # plot(mf.params@species_params$w_inf,mf.params@species_params$ks,log="x") -->
-<!-- # text(mf.params@species_params$w_inf,mf.params@species_params$ks,labels=params@species_params$species,cex=0.5) -->
-<!-- #  -->
-<!-- # ## have a look at paramters - h -->
-<!-- # plot(mf.params@species_params$w_inf,mf.params@species_params$h,log="x") -->
-<!-- # text(mf.params@species_params$w_inf,mf.params@species_params$h,labels=params@species_params$species,cex=0.5) -->
-<!-- # #  -->
-
-<!--  # plot(mf.params@species_params$w_inf,mf.params@species_params$ks/mf.params@species_params$h,log="x") -->
-<!--  # text(mf.params@species_params$w_inf,mf.params@species_params$ks/mf.params@species_params$h,labels=params@species_params$species,cex=0.5) -->
-<!-- #  -->
-
-<!-- # # ## have a look at paramters - gamma -->
-<!-- #  plot(mf.params@species_params$w_inf,mf.params@species_params$gamma,log="xy") -->
-<!-- #  text(mf.params@species_params$w_inf,mf.params@species_params$gamma,labels=params@species_params$species,cex=0.5) -->
-<!-- # #  -->
-<!-- # #  -->
-<!-- # # ## have a look at paramters - wmat/winf -->
-<!-- #  plot(mf.params@species_params$w_inf,mf.params@species_params$w_mat/mf.params@species_params$w_inf,log="xy",xlab=c("Weight"),y=c("Wmat/Winf")) -->
-<!-- #  text(mf.params@species_params$w_inf,mf.params@species_params$w_mat/mf.params@species_params$w_inf,labels=params@species_params$species,cex=0.5) -->
-
-<!-- # changes need to maturation sizes - zoop groups -> wmat 50% of winf -->
-<!-- ``` -->
-<!-- # Model Assumptions -->
-<!-- ### Feeding kernels -->
-<!-- Let's change some of the parameters which make some of these groups less fishy! The feeding kernel in teh above model is set up for fish. Here we use the model of Heneghan to describe a more planktivours feeding kernel form zooplankton and baleen whales. -->
-<!-- ```{r} -->
-
-<!-- ####### feeding kernels - use box kernels for planktovores instead? -->
-<!-- params<-mf.params -->
-
-<!-- #new predation kernel varies with pred size and species but is the same for all prey species, need to fill this in with values, according to Ryans' code -->
-<!-- pred_kern <- array(0, dim=c(length(params@species_params$species),length(params@w),length(params@w_full)),dimnames=list(params@species_params$species,params@w,params@w_full)) -->
-
-<!-- #### change the feeding kernel -->
-<!-- pred_kern[]<- mf.params@species_params$beta -->
-
-<!-- #mvals<-groups$m ### need to enter these manually as removed from file because of new m parameter in mizer setparams function -->
-<!-- #shift over microzoop -->
-<!-- #mvals[1]<--2 -->
-
-<!-- mvals <-c( -->
-<!-- NA, -->
-<!-- 0.73, -->
-<!-- NA, -->
-<!-- NA, -->
-<!-- NA, -->
-<!-- NA, -->
-<!-- NA, -->
-<!-- NA, -->
-<!-- NA, -->
-<!-- NA, -->
-<!-- 1.5) -->
-
-
-<!-- ### Ryan's feeding kernel: -->
-<!-- for (i in 1:length(mvals)) { -->
-
-<!--   D.z <- 2*(3*params@w*1e12/(4*pi))^(1/3) # convert body mass g to ESD (um) -->
-<!--   betas =  (exp(0.02*log(D.z)^2 - mvals[i] + 1.832))^3 -->
-
-<!--   if (!is.na(mvals[i])) pred_kern[i,,]<- betas -->
-
-<!-- } -->
-<!--   pred_kern[]<-exp(-0.5*sweep(log(sweep(sweep(pred_kern,3,params@w_full,"*")^-1,2,params@w,"*")),1,params@species_params$sigma,"/")^2) -->
-<!--   pred_kern[] <- sweep(pred_kern,c(2,3),combn(params@w_full,1,function(x,w)x<params@w,w=params@w),"*") # find out the untrues and then multiply -->
-
-<!-- ##### box feeding kernel for baleen whales   -->
-
-
-
 
 <!-- ####### psi function -->
 
-<!-- #   # Change allocation to reproduction = check for endotherms/determinate growers (should be 1 at wmat not winf) -->
+<!-- #   # change allocation to reproduction = check for endotherms/determinate growers (should be 1 at wmat not winf) -->
 <!-- #  psi_r=20 -->
-<!-- #  params@psi[] <- unlist(tapply(params@w,1:length(params@w),function(wx,Winf,Wmat,n){ -->
-<!-- #    ((1 + (wx/(Wmat))^-psi_r)^-1) * (wx/Winf)^(1-n)},Winf=params@species_params$w_inf,Wmat=params@species_params$w_mat,n=params@n)) -->
-<!-- # # # Set w < 1% of Wmat to 0 -->
-<!-- #  params@psi[unlist(tapply(params@w,1:length(params@w),function(wx,Wmat)wx<(Wmat*0.01),Wmat=params@species_params$w_mat))] <- 0 -->
-<!-- # # # Set all m > M to 1 # Check this is right... -->
-<!-- #  params@psi[unlist(tapply(params@w,1:length(params@w),function(wx,Winf)(wx/Winf)>1,Winf=params@species_params$w_inf))] <- 1 -->
-<!-- #   -->
+<!-- #  params@psi[] <- unlist(tapply(params@w,1:length(params@w),function(wx,winf,wmat,n){ -->
+<!-- #    ((1 + (wx/(wmat))^-psi_r)^-1) * (wx/winf)^(1-n)},winf=params@species_params$w_inf,wmat=params@species_params$w_mat,n=params@n)) -->
+<!-- # # # set w < 1% of wmat to 0 -->
+<!-- #  params@psi[unlist(tapply(params@w,1:length(params@w),function(wx,wmat)wx<(wmat*0.01),wmat=params@species_params$w_mat))] <- 0 -->
+<!-- # # # set all m > m to 1 # check this is right... -->
+<!-- #  params@psi[unlist(tapply(params@w,1:length(params@w),function(wx,winf)(wx/winf)>1,winf=params@species_params$w_inf))] <- 1 -->
+<!-- # -->
 <!-- # ########## erepro -->
-<!-- #   -->
-<!-- #  #and erepro - should this decline with Winf or shoudl it just be a very small number 0.005? -->
+<!-- # -->
+<!-- #  #and erepro - should this decline with winf or shoudl it just be a very small number 0.005? -->
 <!-- # #should this actually be closer to 1 for mammals? -->
 <!-- # params@species_params$erepro <-0.05*params@species_params$w_inf^(-0.75) -->
 <!-- # # need to think about how this sounds in writing -->
-<!-- #  -->
+<!-- # -->
 <!-- # ######### juvenile mortality -->
-<!-- #  -->
-<!-- # ## add declining intraspecific juvenile mortality to background mortality  -->
+<!-- # -->
+<!-- # ## add declining intraspecific juvenile mortality to background mortality -->
 <!-- # for (i in 1: length(params@species_params$species)) params@mu_b[i,] <- params@mu_b[i,]  + 0.1*params@w^-0.25 -->
-<!-- #  -->
+<!-- # -->
 
 
 <!-- ``` -->
