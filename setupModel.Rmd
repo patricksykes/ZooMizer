@@ -18,7 +18,7 @@ We begin with some setup of required packages.
 #get required packages
 library(devtools)
 #most up to date master branch of mizer
-#install_github("sizespectrum/mizer")
+install_github("sizespectrum/mizer")
 #install_github("astaaudzi/mizer-rewiring", ref = "temp-model-comp")
 #documentation here:
 #https://sizespectrum.org/mizer/dev/index.html
