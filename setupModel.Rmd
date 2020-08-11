@@ -163,7 +163,7 @@ setZooMizerConstants <- function(params, Groups, input_params){
       pred_kernel[i, , ] <- exp(-0.5*(log((beta_mat*prey_weight_matrix)/
                                      pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
         sqrt(2*pi*params@species_params$FeedWidth[i]^2)
-      # The feeding kernel of filter feeders is not expected to change much with increasing size so we fix it here
+      # The feeding kernel of filter feeders is not expected to change  with increasing size so we fix it here
       
       # if (param$fixed_filterPPMR == TRUE){
       if(i == 3){
@@ -193,9 +193,10 @@ params <- setExtMort(params, z0 = M_sb)
 params <- setSearchVolume(params, SearchVol)
 params <- setPredKernel(params, pred_kernel)
 
+return(params)
 }
 
-setZooMizerConstants(mf.params, groups, enviro_row)
+mf.params <- setZooMizerConstants(params = mf.params, Groups = groups, input_params = enviro_row)
 
 
 ```
@@ -329,6 +330,7 @@ Now let's try that out:
 ```{r}
 sim2 <- project(mf.params, t_max = 100, dt = 0.01)
 plot(sim2)
+plotlySpectra(sim2, power = 0)
 ```
 
 Still missing is the differential prey nutrition based on prey carbon content. We'll do that by editing the `mizerEncounter()` function found in `project_methods.R`, and using `setRateFunction(params, "Encounter", "myEncounter")`. It might be possible to instead edit the chunk above too to incorporate the different method (since we've gone there anyway...)
@@ -339,13 +341,12 @@ Still missing is the differential prey nutrition based on prey carbon content. W
 assim_eff = matrix(mf.params@species_params$GrossGEscale * mf.params@species_params$Carbon, nrow = nrow(mf.params@species_params), ncol = nrow(mf.params@species_params))
 get_filterfeeders <- which(mf.params@species_params$FeedType == "FilterFeeder")
 
+#TODO: make the assim_eff a parameter in the MizerParams object
 for (i in get_filterfeeders) {
   assim_eff[,i] <- assim_eff[,i] / mf.params@species_params$Carbon[i]
 }
 
-new_Encounter <- function(params, n = params@initial_n, 
-                         n_pp = params@initial_n_pp,
-                         B = params@initial_B) {
+new_Encounter <- function(params, n, n_pp, n_other, t, ...) {
 
     # idx_sp are the index values of params@w_full such that
     # params@w_full[idx_sp] = params@w
@@ -353,40 +354,53 @@ new_Encounter <- function(params, n = params@initial_n,
     
     # Note: removed the FFT code because it does not apply to this case.
     
-    # n_eff_prey is the total prey abundance by size exposed to each
-    # predator (prey not broken into species - here we are just working out
-    # how much a predator eats - not which species are being eaten - that is
-    # in the mortality calculation
-    # \sum_j \theta_{ij} N_j(w_p) w_p dw_p
-    n_eff_prey <- sweep(params@interaction %*% n, 2, 
-                        params@w * params@dw, "*", check.margin = FALSE) 
-    # pred_kernel is predator species x predator size x prey size
-    # So multiply 3rd dimension of pred_kernel by the prey biomass density
-    # Then sum over 3rd dimension to get consumption rate of each predator by 
-    # predator size
-    # This line is a bottle neck
-    phi_prey_species <- rowSums(sweep(
-      params@pred_kernel[, , idx_sp, drop = FALSE],
-      c(1, 3), n_eff_prey, "*", check.margin = FALSE), dims = 2)
-    # Eating the background
-    # This line is a bottle neck
-    phi_prey_background <- params@species_params$interaction_p *
-      rowSums(sweep(
-        params@pred_kernel, 3, params@dw_full * params@w_full * n_pp,
-        "*", check.margin = FALSE), dims = 2)
-    encounter <- params@search_vol * (phi_prey_species + phi_prey_background)
+    # If the feeding kernel does not have a fixed predator/prey mass ratio
+    # then the integral is not a convolution integral and we can not use fft.
+    # In this case we use the code from mizer version 0.3
+    
+        # n_eff_prey is the total prey abundance by size exposed to each
+        # predator (prey not broken into species - here we are just working out
+        # how much a predator eats - not which species are being eaten - that is
+        # in the mortality calculation
+        # \sum_j \theta_{ij} N_j(w_p) w_p dw_p
+        assim_prey <- assim_eff * params@interaction
+        n_eff_prey <- sweep(assim_prey %*% n, 2, 
+                            params@w * params@dw, "*", check.margin = FALSE) 
+        # pred_kernel is predator species x predator size x prey size
+        # So multiply 3rd dimension of pred_kernel by the prey biomass density
+        # Then sum over 3rd dimension to get consumption rate of each predator by 
+        # predator size
+        # This line is a bottle neck
+        phi_prey_species <- rowSums(sweep(
+            params@pred_kernel[, , idx_sp, drop = FALSE],
+            c(1, 3), n_eff_prey, "*", check.margin = FALSE), dims = 2)
+        # Eating the background
+        # This line is a bottle neck
+        phi_prey_background <- params@species_params$interaction_resource *
+            rowSums(sweep(
+            params@pred_kernel, 3, params@dw_full * params@w_full * n_pp,
+            "*", check.margin = FALSE), dims = 2)
+        encounter <- params@search_vol * (phi_prey_species + phi_prey_background)
+    
     dimnames(encounter) <- dimnames(params@metab)
     
-    # Add contribution from unstructured resources
-    # Can't use rowSums or colSums unfortunately because
-    # the resource index that we want to sum over is the middle index.
-    for (u in seq_along(B)) {
-        encounter[] <- encounter + params@rho[, u, ] * B[u]
+    # Add contributions from other components
+    for (i in seq_along(params@other_encounter)) {
+        encounter <- encounter + 
+            do.call(params@other_encounter[[i]], 
+                    list(params = params,
+                         n = n, n_pp = n_pp, n_other = n_other,
+                         component = names(params@other_encounter)[[i]], ...))
     }
+    
     return(encounter)
 }
+    
+mf.params2 <- setRateFunction(mf.params, "Encounter", "new_Encounter")
 
-setRateFunction(params, "Encounter", "new_Encounter")
+sim3 <- project(mf.params2)
+plot(sim3)
+plotlySpectra(sim3, power=0)
 ```
 
 <!-- ```{r} -->
