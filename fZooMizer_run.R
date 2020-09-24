@@ -227,6 +227,37 @@ new_Encounter <- function(params, n, n_pp, n_other, t, ...) {
   return(encounter)
 }
 
+new_PredRate <- function (params, n, n_pp, n_other, t, feeding_level, ...) 
+{
+  no_sp <- dim(params@interaction)[1]
+  no_w <- length(params@w)
+  no_w_full <- length(params@w_full)
+  
+  if (length(params@ft_pred_kernel_p) == 1) {
+    n_total_in_size_bins <- sweep(n, 2, params@dw, "*", 
+                                  check.margin = FALSE)
+    pred_rate <- sweep(params@pred_kernel, c(1, 2), (1 - 
+                                                       feeding_level) * params@search_vol * n_total_in_size_bins * params@other_params$temp_eff, 
+                       "*", check.margin = FALSE)
+    pred_rate <- colSums(aperm(pred_rate, c(2, 1, 3)), dims = 1)
+    return(pred_rate)
+  }
+  idx_sp <- (no_w_full - no_w + 1):no_w_full
+  Q <- matrix(0, nrow = no_sp, ncol = no_w_full)
+  Q[, idx_sp] <- sweep((1 - feeding_level) * params@search_vol * params@other_params$temp_eff *
+                         n, 2, params@dw, "*")
+  pred_rate <- Re(t(mvfft(t(params@ft_pred_kernel_p) * mvfft(t(Q)), 
+                          inverse = TRUE)))/no_w_full
+  return(pred_rate * params@ft_mask)
+}
+
+new_EReproAndGrowth <- function (params, n, n_pp, n_other, t, encounter, feeding_level, 
+                                 ...) 
+{
+  sweep((1 - feeding_level) * encounter * params@other_params$temp_eff, 1, params@species_params$alpha, 
+        "*", check.margin = FALSE) - params@metab
+}
+
 fZooMizer_run <- function(groups, input){
 
   kappa = 10^(input$phyto_int)
@@ -259,12 +290,18 @@ fZooMizer_run <- function(groups, input){
                                      #pred_kernel = ... #probably easiest to just import this/pre-calculate it, once dimensions are worked out
   )
   
+  temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(mf.params@species_params$species), ncol = length(mf.params@w))
+  
   mf.params@other_params$assim_eff <- setassim_eff(groups)
+  
+  mf.params@other_params$temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(mf.params@species_params$species), ncol = length(mf.params@w))
   
   mf.params <- setZooMizerConstants(params = mf.params, Groups = groups, sst = input$sst)
   
   mf.params <- setParams(mf.params)
   
+  mf.params <- setRateFunction(mf.params, "PredRate", "new_PredRate")
+  mf.params <- setRateFunction(mf.params, "EReproAndGrowth", "new_EReproAndGrowth")
   
   mf.params <- setRateFunction(mf.params, "Encounter", "new_Encounter")
   
