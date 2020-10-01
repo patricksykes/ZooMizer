@@ -39,3 +39,11 @@ vignettes/*.pdf
 .Renviron
 ZooMizer.Rproj
 *.Rout
+
+
+#runs data
+/202*/
+data/full_20200502_NoDiffusion_SaveTimeStep.RData
+data/20200502_NoDiffusion_SaveTimeStep_0001.RDS
+test_grid.RDS
+zoomssgrid.rds

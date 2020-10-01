@@ -30,7 +30,7 @@ setZooMizerConstants <- function(params, Groups, sst){
     }
     
     ### Search volume
-    SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$gamma[i]))
+    SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$q[i]))
     SearchVol[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
     SearchVol[i, 10^(params@species_params$w_min[i]) > params@w] <- 0
     

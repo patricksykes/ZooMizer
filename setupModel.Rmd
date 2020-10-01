@@ -148,7 +148,7 @@ setZooMizerConstants <- function(params, Groups, input_params){
     }
     
     ### Search volume
-    SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$gamma[i]))
+    SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$q[i]))
     SearchVol[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
     SearchVol[i, 10^(params@species_params$w_min[i]) > params@w] <- 0
     
@@ -449,3 +449,44 @@ plot(sim4)
 plotlySpectra(sim4, power = 0)
 
 ```
+
+
+Something is not quite right...Here's a very hacky way to get the comparison...I've run the model for 20 different combinations of SST and chlorophyll-a and matched them to the relevant runs of ZooMSS (without diffusion).
+
+```{r}
+
+hack <- sim2 #making a "fake" MizerSim object that we can use plots on.
+
+zoomssgrid <- readRDS("zoomssgrid.rds")
+pzoomss <- list()
+for (i in 1:20) {
+   hack@n[i,,]<- zoomssgrid[[i]]
+   pzoomss[[i]] <- plotSpectra(hack, time_range = i, power = 0)+labs(title = paste("ZooMSS plot",i))
+}
+
+zoomizergrid <- readRDS("test_grid.RDS")
+
+#dim(zoomizergrid[[1]]@n)
+
+pzoomizer <- list()
+for (i in 1:20) {
+  zoomizergrid[[i]]@n[1001,,] <- apply(as.array(zoomizergrid[[i]]@n[502:1001,,]),c(2,3),'mean')
+  pzoomizer[[i]] <- plotSpectra(zoomizergrid[[i]], time_range = 1000, power = 0)+labs(title = paste("ZooMizer plot",i))
+}
+
+pzoomss[[4]]
+pzoomizer[[4]]
+
+testdf <- data.frame(zoomsstcb = numeric(20),zoomizertcb = numeric(20))
+for (i in 1:20) {
+testdf$zoomsstcb[i] = sum(hack@n[i,,])
+testdf$zoomizertcb[i] = sum(zoomizergrid[[i]]@n[1001,,])
+}
+
+ggplot(testdf, aes(x=log10(zoomsstcb), y=log10(zoomizertcb)))+
+  geom_point()+
+  geom_smooth(method = 'lm')
+
+```
+
+
