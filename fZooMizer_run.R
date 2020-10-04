@@ -207,7 +207,7 @@ new_Encounter <- function(params, n, n_pp, n_other, t, ...) {
     c(1, 3), n_eff_prey, "*", check.margin = FALSE), dims = 2)
   # Eating the background
   # This line is a bottle neck
-  phi_prey_background <- params@species_params$interaction_resource *
+  phi_prey_background <- assim_phyto * params@species_params$interaction_resource *
     rowSums(sweep(
       params@pred_kernel, 3, params@dw_full * params@w_full * n_pp,
       "*", check.margin = FALSE), dims = 2)
@@ -279,7 +279,7 @@ fZooMizer_run <- function(groups, input){
                                      interaction=NULL, #NULL sets all to 1, no strict herbivores
                                      no_w = 178, #number of zoo+fish size classes;
                                      min_w_pp = 10^(-14.4), #minimum phyto size. Note: use -14.4, not -14.5, otherwise it makes an extra size class
-                                     w_pp_cutoff = 10^(input$phyto_max), #maximumplot phyto size
+                                     w_pp_cutoff = 10^(input$phyto_max), #maximum phyto size
                                      n = 0.7, #The allometric growth exponent used in ZooMSS
                                      z0pre = 1, #external mortality (senescence)
                                      z0exp = 0.3,
@@ -304,6 +304,8 @@ fZooMizer_run <- function(groups, input){
   mf.params <- setRateFunction(mf.params, "EReproAndGrowth", "new_EReproAndGrowth")
   
   mf.params <- setRateFunction(mf.params, "Encounter", "new_Encounter")
+  
+  mf.params <- setReproduction(mf.params, repro_prop = matrix(0, nrow = nrow(mf.params@psi), ncol = ncol(mf.params@psi)))
   
   sim <- project(mf.params, dt = dt, t_max = tmaxx)
   

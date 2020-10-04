@@ -163,6 +163,7 @@ setZooMizerConstants <- function(params, Groups, input_params){
       pred_kernel[i, , ] <- exp(-0.5*(log((beta_mat*prey_weight_matrix)/
                                      pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
         sqrt(2*pi*params@species_params$FeedWidth[i]^2)
+      
       # The feeding kernel of filter feeders is not expected to change  with increasing size so we fix it here
       
       # if (param$fixed_filterPPMR == TRUE){
@@ -343,6 +344,9 @@ Still missing is the differential prey nutrition based on prey carbon content. W
 assim_eff = matrix(mf.params@species_params$GrossGEscale * mf.params@species_params$Carbon, nrow = nrow(mf.params@species_params), ncol = nrow(mf.params@species_params))
 get_filterfeeders <- which(mf.params@species_params$FeedType == "FilterFeeder")
 
+cc_phyto <- 0.1 #carbon content of phytoplankton
+assim_phyto <- mf.params@species_params$GrossGEscale * cc_phyto #assimilation efficiency when eating phytoplankton
+
 #TODO: make the assim_eff a parameter in the MizerParams object
 for (i in get_filterfeeders) {
   assim_eff[,i] <- assim_eff[,i] / mf.params@species_params$Carbon[i]
@@ -378,7 +382,7 @@ new_Encounter <- function(params, n, n_pp, n_other, t, ...) {
             c(1, 3), n_eff_prey, "*", check.margin = FALSE), dims = 2)
         # Eating the background
         # This line is a bottle neck
-        phi_prey_background <- params@species_params$interaction_resource *
+        phi_prey_background <- assim_phyto * params@species_params$interaction_resource *
             rowSums(sweep(
             params@pred_kernel, 3, params@dw_full * params@w_full * n_pp,
             "*", check.margin = FALSE), dims = 2)
@@ -451,7 +455,7 @@ plotlySpectra(sim4, power = 0)
 ```
 
 
-Something is not quite right...Here's a very hacky way to get the comparison...I've run the model for 20 different combinations of SST and chlorophyll-a and matched them to the relevant runs of ZooMSS (without diffusion).
+Something is not quite right...Here's a very hacky way to get the comparison...I've run the model to 1000 years with `dt=0.01` for 20 different combinations of SST and chlorophyll-a and matched them to the relevant runs of ZooMSS (without diffusion).
 
 ```{r}
 
@@ -483,10 +487,13 @@ testdf$zoomsstcb[i] = sum(hack@n[i,,])
 testdf$zoomizertcb[i] = sum(zoomizergrid[[i]]@n[1001,,])
 }
 
-ggplot(testdf, aes(x=log10(zoomsstcb), y=log10(zoomizertcb)))+
+scatter <- ggplot(testdf, aes(x=log10(zoomsstcb), y=log10(zoomizertcb)))+
   geom_point()+
   geom_smooth(method = 'lm')
 
+scatter
+
+ggsave("zoomss_zoomizer_comparison_tcb.png",scatter)
 ```
 
 
