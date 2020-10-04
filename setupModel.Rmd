@@ -30,32 +30,12 @@ library(mizerExperimental)
 
 ```
 
-### Data
-Next, let's load in and check the data used in the ZooMSS model. TODO: add in some biomass data
-
-```{r}
-
-#read in group data
-groups <-read.csv("data/TestGroups_mizer.csv")
-groups$w_min <- 10^groups$w_min
-groups$w_inf <- 10^groups$w_inf
-groups$w_mat <- 10^groups$w_mat
-#groups<-merge(groups,dat,by.x="species",by.y="group",all=T)
-
-# have a look at plot
-# plot(groups$w_inf,groups$biomass.tperkm2,xlab="log Maximum Weight [g]", ylab=" log Total Biomass", log="xy",col="blue",pch=16)
-# text(groups$w_inf,groups$biomass.tperkm2,labels=groups$species,cex=0.5)
-
-# could plot the paramter allometries here to explore
-```
-
-
 ## Set-up mizer model
 
 Next let's read in the parameters from ZooMSS.
 
 ```{r}
-#read groups again for southern ocean model, this time subsetting key groups
+
 groups <-read.csv("data/TestGroups_mizer.csv")
 groups$w_min <- 10^groups$w_min #convert from log10 values
 groups$w_inf <- 10^groups$w_inf
@@ -64,18 +44,9 @@ groups$h <- 1e50 # should be Inf, but that breaks the calculations. Massive valu
 groups$ks <- 0 #turn off standard metabolism
 #todo - ramp up constant repro for coexistence
 
-#groups <- readRDS("data/groups.RDS")[-1,]
-#check fails these tests:
-#groups$w_mat25 >= groups$w_mat #note we don't have w_mat25. Not sure if it's necessary/desirable. Probably not.
-groups$w_mat <= groups$w_min
-groups$w_inf <= groups$w_mat
-
-
-
 # read interaction matrix
 # get the interaction matrix - actually I think we can leave this out. Default is all 1s, which is the same as in ZooMSS. Included for completeness; it may be useful in future to keep this in.
 theta <- readRDS("data/zoomss_inter.rds")[,-1]
-#[-1,-1]
 
  
 ```
@@ -101,13 +72,13 @@ mf.params <- newMultispeciesParams(species_params=groups,
                                    interaction=NULL, #NULL sets all to 1, no strict herbivores
                                    no_w = 178, #number of zoo+fish size classes;
                                    min_w_pp = 10^(-14.4), #minimum phyto size. Note: use -14.4, not -14.5, otherwise it makes an extra size class
-                                   w_pp_cutoff = 10^(enviro_row$phyto_max), #maximumplot phyto size
+                                   w_pp_cutoff = 10^(enviro_row$phyto_max), #maximum phyto size
                                    n = 0.7, #The allometric growth exponent used in ZooMSS
                                    z0pre = 1, #external mortality (senescence)
                                    z0exp = 0.3,
                                    resource_dynamics = "phyto_fixed",
                                    kappa = 10^(enviro_row$phyto_int), 
-                                   lambda = -enviro_row$phyto_slope+1,
+                                   lambda = 1-enviro_row$phyto_slope,
                                    RDD = constantRDD(species_params = groups) #first go at this
                                    #pred_kernel = ... #probably easiest to just import this/pre-calculate it, once dimensions are worked out
 )
@@ -448,6 +419,9 @@ new_EReproAndGrowth <- function (params, n, n_pp, n_other, t, encounter, feeding
 mf.params3 <- setRateFunction(mf.params2, "PredRate", "new_PredRate")
 mf.params3 <- setRateFunction(mf.params3, "EReproAndGrowth", "new_EReproAndGrowth")
 
+#fix up energy to reproduction
+mf.params3 <- setReproduction(mf.params3, repro_prop = matrix(0, nrow = nrow(mf.params3@psi), ncol = ncol(mf.params3@psi)))
+
 sim4 <- project(mf.params3, t_max = 100, dt = 0.01)
 plot(sim4)
 plotlySpectra(sim4, power = 0)
@@ -458,6 +432,8 @@ plotlySpectra(sim4, power = 0)
 Something is not quite right...Here's a very hacky way to get the comparison...I've run the model to 1000 years with `dt=0.01` for 20 different combinations of SST and chlorophyll-a and matched them to the relevant runs of ZooMSS (without diffusion).
 
 ```{r}
+
+require(ggplot2)
 
 hack <- sim2 #making a "fake" MizerSim object that we can use plots on.
 
