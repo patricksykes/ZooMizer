@@ -258,6 +258,11 @@ new_EReproAndGrowth <- function (params, n, n_pp, n_other, t, encounter, feeding
         "*", check.margin = FALSE) - params@metab
 }
 
+newFeedingLevel <- function (params, n, n_pp, n_other, t, encounter, ...) 
+{
+  return(encounter)
+}
+
 fZooMizer_run <- function(groups, input){
 
   kappa = 10^(input$phyto_int)
@@ -302,7 +307,7 @@ fZooMizer_run <- function(groups, input){
   
   mf.params <- setRateFunction(mf.params, "PredRate", "new_PredRate")
   mf.params <- setRateFunction(mf.params, "EReproAndGrowth", "new_EReproAndGrowth")
-  
+  mf.params <- setRateFunction(mf.params, "FeedingLevel", "newFeedingLevel")
   mf.params <- setRateFunction(mf.params, "Encounter", "new_Encounter")
   
   mf.params <- setReproduction(mf.params, repro_prop = matrix(0, nrow = nrow(mf.params@psi), ncol = ncol(mf.params@psi)))

@@ -7,10 +7,8 @@ assignInNamespace("project_simple", new_project_simple, ns = "mizer")
 
 
 Groups <- read.csv("data/TestGroups_mizer.csv")
-envirofull <- readRDS("data/envirofull_20200317.RDS")
 
-enviro <- envirofull[envirofull$sst >= 1,]
-enviro <- enviro[seq(71,1428,71),]
+enviro <- readRDS("data/enviro_test20.RDS")
 enviro$dt <- 0.01
 enviro$tmaxx <- 1000
 
