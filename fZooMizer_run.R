@@ -1,5 +1,5 @@
 phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa=params@resource_params$kappa, lambda=params@resource_params$lambda, ... ) {
-  n_pp <- kappa*params@w_full^(-lambda) #returns the fixed spectrum at every time step
+  n_pp <- kappa*params@w_full^(1-lambda) #returns the fixed spectrum at every time step
   n_pp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
   return(n_pp)
 }
@@ -15,7 +15,7 @@ setZooMizerConstants <- function(params, Groups, sst){
   prey_weight_matrix <- matrix(params@w_full, nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
   pred_weight_matrix <- matrix(params@w, nrow = length(params@w), ncol = length(params@w_full))
   
-  for(i in 1:nrow(params@species_params)){
+    for(i in 1:nrow(params@species_params)){
     ## Senescence mortality
     if(params@species_params$Type[i] == "Zooplankton"){
       M_sb[i,] <- ZSpre*(params@w/(10^(params@species_params$w_mat[i])))^ZSexp
@@ -70,6 +70,11 @@ setZooMizerConstants <- function(params, Groups, sst){
   #temperature effect 
   temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(params@species_params$species), ncol = length(params@w))
   M_sb <- temp_eff * M_sb # Incorporate temp effect on senscence mortality
+  
+  
+  params@initial_n_pp <- params@resource_params$kappa * params@w_full^(1 - mf.params@resource_params$lambda)
+  params@initial_n_pp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
+  
   
   params <- setExtMort(params, z0 = M_sb)
   params <- setSearchVolume(params, SearchVol)
@@ -251,8 +256,7 @@ new_PredRate <- function (params, n, n_pp, n_other, t, feeding_level, ...)
   return(pred_rate * params@ft_mask)
 }
 
-new_EReproAndGrowth <- function (params, n, n_pp, n_other, t, encounter, feeding_level, 
-                                 ...) 
+new_EReproAndGrowth <- function (params, n, n_pp, n_other, t, encounter, feeding_level, ...) 
 {
   sweep((1 - feeding_level) * encounter * params@other_params$temp_eff, 1, params@species_params$alpha, 
         "*", check.margin = FALSE) - params@metab

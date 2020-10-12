@@ -63,7 +63,7 @@ enviro_row <- readRDS("data/envirofull_20200317.RDS")[ID,]
 
 #set up the fixed phyoplankton spectrum
 phyto_fixed <- function(params, n, n_pp, n_other, rates, dt = 0.01, kappa = 10^enviro_row$phyto_int, lambda = 1-enviro_row$phyto_slope,...) {
-    n_pp <- kappa*params@w_full^(-lambda) #returns the fixed spectrum at every time step
+    n_pp <- kappa*params@w_full^(1-lambda) #returns the fixed spectrum at every time step
     n_pp[params@w_full>params@resource_params$w_pp_cutoff] <- 0
     return(n_pp)
 }
@@ -188,7 +188,7 @@ plotlyFeedingLevel(sim)
 # macrozooplankton - they are not growing enough,why?
 #tuneParams(mf.params)
 plotlyGrowthCurves(sim,percentage = T)
-plotlySpectra(sim)
+plotlySpectra(sim, power = 0)
 ```
 
 
