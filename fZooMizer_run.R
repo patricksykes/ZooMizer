@@ -1,7 +1,7 @@
 phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa=params@resource_params$kappa, lambda=params@resource_params$lambda, ... ) {
-  n_pp <- kappa*params@w_full^(1-lambda) #returns the fixed spectrum at every time step
-  n_pp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
-  return(n_pp)
+  npp <- kappa*params@w_full^(1-lambda) #returns the fixed spectrum at every time step
+  npp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
+  return(npp)
 }
 
 setZooMizerConstants <- function(params, Groups, sst){
@@ -72,9 +72,21 @@ setZooMizerConstants <- function(params, Groups, sst){
   M_sb <- temp_eff * M_sb # Incorporate temp effect on senscence mortality
   
   
-  params@initial_n_pp <- params@resource_params$kappa * params@w_full^(1 - mf.params@resource_params$lambda)
+  params@initial_n_pp <- params@resource_params$kappa * params@w_full^(1-params@resource_params$lambda)
   params@initial_n_pp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
   
+  a_dynam <- (params@resource_params$kappa)*(params@w[1]^(2-params@resource_params$lambda)) # calculate coefficient for initial dynamic spectrum, so that N(w_phyto) equals N(w_dynam) at w[1]
+  
+  # Initial abundances form a continuation of the plankton spectrum, with a slope of -1
+  tempN <- matrix(a_dynam*(params@w)^-1, nrow = nrow(params@species_params), ncol = length(params@w), byrow = TRUE)
+  props_z <- params@species_params$Prop[params@species_params$Type=="Zooplankton"] # Zooplankton proportions
+  tempN[params@species_params$Type=="Zooplankton",] <- props_z * tempN[params@species_params$Type=="Zooplankton",] # Set abundances of diff zoo groups based on smallest size class proportions
+  tempN[params@species_params$Type=="Fish",] <- (1/sum(mf.params@species_params$Type=="Fish")) * tempN[params@species_params$Type=="Fish",] # Set abundandances of fish groups based on smallest size class proportions
+  
+  # For each group, set densities at w > Winf and w < Wmin to 0
+  tempN[unlist(tapply(round(log10(param$w), digits = 2), 1:length(param$w), function(wx,Winf) Winf < wx, Winf = param$Groups$Wmax))] <- 0
+  tempN[unlist(tapply(round(log10(param$w), digits = 2), 1:length(param$w), function(wx,Wmin) Wmin > wx, Wmin = param$Groups$W0))] <- 0
+  params@initial_n <- tempN
   
   params <- setExtMort(params, z0 = M_sb)
   params <- setSearchVolume(params, SearchVol)

@@ -26,9 +26,9 @@ zoomizergrid <- list()
 
 for (i in 1:nrow(enviro)) {
   phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa = 10^enviro$phyto_int[i], lambda= 1-enviro$phyto_slope[i], ... ) {
-    n_pp <- kappa*params@w_full^(-lambda) #returns the fixed spectrum at every time step
-    n_pp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
-    return(n_pp)
+    npp <- kappa*params@w_full^(1-lambda) #returns the fixed spectrum at every time step
+    npp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
+    return(npp)
   }
   
   sim <- fZooMizer_run(groups = Groups, input = enviro[i,])

@@ -58,8 +58,10 @@ TODO: adjust parameters here.
 ```{r}
 
 
-ID <- 1 #index of environmental data to choose
-enviro_row <- readRDS("data/envirofull_20200317.RDS")[ID,]
+ID <- 223 #index of environmental data to choose
+envirofull <- readRDS("data/envirofull_20200317.RDS")
+enviro_row <- envirofull[envirofull$cellID==ID,]
+
 
 #set up the fixed phyoplankton spectrum
 phyto_fixed <- function(params, n, n_pp, n_other, rates, dt = 0.01, kappa = 10^enviro_row$phyto_int, lambda = 1-enviro_row$phyto_slope,...) {
@@ -177,9 +179,11 @@ Try running it:
 
 ```{r}
 
+mf.params@initial_n_pp <- mf.params@resource_params$kappa * mf.params@w_full^(1 - mf.params@resource_params$lambda)
+mf.params@initial_n_pp[mf.params@w_full>mf.params@resource_params$w_pp_cutoff] <- 0
 mf.params <- setParams(mf.params)
 
-sim <- project(mf.params, t_max=100,dt = 0.01)
+sim <- project(mf.params)
 plot(sim) #note feeding level means satiation - 0 since there's no satiation in this model.
 plotlyBiomass(sim)
 #plotlyGrowthCurves(sim,species="macrozooplankton")
@@ -422,6 +426,8 @@ mf.params3 <- setRateFunction(mf.params3, "EReproAndGrowth", "new_EReproAndGrowt
 #fix up energy to reproduction
 mf.params3 <- setReproduction(mf.params3, repro_prop = matrix(0, nrow = nrow(mf.params3@psi), ncol = ncol(mf.params3@psi)))
 
+
+
 sim4 <- project(mf.params3, t_max = 100, dt = 0.01)
 plot(sim4)
 plotlySpectra(sim4, power = 0)
@@ -465,8 +471,8 @@ for (i in 1:length(zoomizergrid)) {
   pzoomizer[[i]] <- plotSpectra(zoomizergrid[[i]], time_range = 1000, power = 0)+labs(title = paste("ZooMizer plot",i))
 }
 
-pzoomss[[10]]
-pzoomizer[[10]]
+pzoomss[[20]]
+pzoomizer[[20]]
 
 testdf <- data.frame(zoomsstcb = numeric(20),zoomizertcb = numeric(20))
 for (i in 1:nrow(testdf)) {
@@ -481,7 +487,7 @@ testdf$zoomizertcb[i] = sum(zoomizergrid[[i]]@n[1001,,]*w)
 ggsave("zoomss_zoomizer_comparison_tcb.png",scatter)
 
 testdf$chlo <- enviro$chlo
-(chlotcb <- ggplot(data=testdf, aes(x=log10(chlo),y=log10(zoomizertcb)))+
+(chlotcb <- ggplot(data=testdf, aes(x=log10(chlo),y=log10(zoomsstcb)))+
   geom_point())
 ggsave("zoomizer_tcb_vs_chlo.png", chlotcb)
 
