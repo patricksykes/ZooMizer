@@ -1,5 +1,5 @@
 phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa=params@resource_params$kappa, lambda=params@resource_params$lambda, ... ) {
-  npp <- kappa*params@w_full^(1-lambda) #returns the fixed spectrum at every time step
+  npp <- kappa*params@w_full^(-lambda) #returns the fixed spectrum at every time step
   npp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
   return(npp)
 }
@@ -18,21 +18,21 @@ setZooMizerConstants <- function(params, Groups, sst){
     for(i in 1:nrow(params@species_params)){
     ## Senescence mortality
     if(params@species_params$Type[i] == "Zooplankton"){
-      M_sb[i,] <- ZSpre*(params@w/(10^(params@species_params$w_mat[i])))^ZSexp
-      M_sb[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-      M_sb[i, 10^(params@species_params$w_mat[i]) > params@w] <- 0
+      M_sb[i,] <- ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
+      M_sb[i, params@species_params$w_max[i] < params@w] <- 0
+      M_sb[i, params@species_params$w_mat[i] > params@w] <- 0
     }
     
     if(params@species_params$Type[i] == "Fish"){
-      M_sb[i,] <- 0.1*ZSpre*(params@w/(10^(params@species_params$w_mat[i])))^ZSexp
-      M_sb[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-      M_sb[i, 10^(params@species_params$w_mat[i]) > params@w] <- 0
+      M_sb[i,] <- 0.1*ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
+      M_sb[i, params@species_params$w_max[i] < params@w] <- 0
+      M_sb[i, params@species_params$w_mat[i] > params@w] <- 0
     }
     
     ### Search volume
     SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$q[i]))
-    SearchVol[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-    SearchVol[i, 10^(params@species_params$w_min[i]) > params@w] <- 0
+    SearchVol[i, params@species_params$w_max[i] < params@w] <- 0
+    SearchVol[i, params@species_params$w_min[i] > params@w] <- 0
     
     ### Predation Kernels
     if(is.na(params@species_params$PPMRscale[i]) == FALSE){ # If group has an m-value (zooplankton)
@@ -72,20 +72,22 @@ setZooMizerConstants <- function(params, Groups, sst){
   M_sb <- temp_eff * M_sb # Incorporate temp effect on senscence mortality
   
   
-  params@initial_n_pp <- params@resource_params$kappa * params@w_full^(1-params@resource_params$lambda)
+  params@initial_n_pp <- params@resource_params$kappa * params@w_full^(-params@resource_params$lambda)
   params@initial_n_pp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
+  
   
   a_dynam <- (params@resource_params$kappa)*(params@w[1]^(2-params@resource_params$lambda)) # calculate coefficient for initial dynamic spectrum, so that N(w_phyto) equals N(w_dynam) at w[1]
   
   # Initial abundances form a continuation of the plankton spectrum, with a slope of -1
-  tempN <- matrix(a_dynam*(params@w)^-1, nrow = nrow(params@species_params), ncol = length(params@w), byrow = TRUE)
+  tempN <- matrix(a_dynam*(params@w)^-2, nrow = nrow(params@species_params), ncol = length(params@w), byrow = TRUE)
   props_z <- params@species_params$Prop[params@species_params$Type=="Zooplankton"] # Zooplankton proportions
   tempN[params@species_params$Type=="Zooplankton",] <- props_z * tempN[params@species_params$Type=="Zooplankton",] # Set abundances of diff zoo groups based on smallest size class proportions
-  tempN[params@species_params$Type=="Fish",] <- (1/sum(mf.params@species_params$Type=="Fish")) * tempN[params@species_params$Type=="Fish",] # Set abundandances of fish groups based on smallest size class proportions
+  tempN[params@species_params$Type=="Fish",] <- (1/sum(params@species_params$Type=="Fish")) * tempN[params@species_params$Type=="Fish",] # Set abundandances of fish groups based on smallest size class proportions
   
   # For each group, set densities at w > Winf and w < Wmin to 0
-  tempN[unlist(tapply(round(log10(param$w), digits = 2), 1:length(param$w), function(wx,Winf) Winf < wx, Winf = param$Groups$Wmax))] <- 0
-  tempN[unlist(tapply(round(log10(param$w), digits = 2), 1:length(param$w), function(wx,Wmin) Wmin > wx, Wmin = param$Groups$W0))] <- 0
+  tempN[unlist(tapply(round(log10(params@w), digits = 2), 1:length(params@w), function(wx,Winf) Winf < wx, Winf = log10(params@species_params$w_inf)))] <- 0
+  tempN[unlist(tapply(round(log10(params@w), digits = 2), 1:length(params@w), function(wx,Wmin) Wmin > wx, Wmin = log10(params@species_params$w_min)))] <- 0
+  dimnames(tempN) <- dimnames(params@initial_n)
   params@initial_n <- tempN
   
   params <- setExtMort(params, z0 = M_sb)
@@ -186,7 +188,7 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
       n[i,params@w_min_idx[i]] <- params@species_params$Prop[i] * sum(n[-i,params@w_min_idx[i]])
     }
     if(params@species_params$Type[i] == "Fish"){
-      n[i,params@w_min_idx[i]] <- 1/3 * sum(n[1:9,params@w_min_idx[i]])
+      n[i,params@w_min_idx[i]] <- 1/length(which(params@species_params$Type=="Fish")) * sum(n[which(params@species_params$Type!="Fish"),params@w_min_idx[i]])
     }
   }
   
