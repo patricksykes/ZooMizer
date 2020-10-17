@@ -36,7 +36,7 @@ Next let's read in the parameters from ZooMSS.
 
 ```{r}
 
-groups <-read.csv("data/TestGroups_mizer.csv")
+groups <-read_csv("data/TestGroups_mizer.csv")
 groups$w_min <- 10^groups$w_min #convert from log10 values
 groups$w_inf <- 10^groups$w_inf
 groups$w_mat <- 10^groups$w_mat
@@ -58,8 +58,10 @@ TODO: adjust parameters here.
 ```{r}
 
 
-ID <- 1 #index of environmental data to choose
-enviro_row <- readRDS("data/envirofull_20200317.RDS")[ID,]
+ID <- 223 #index of environmental data to choose
+envirofull <- readRDS("data/envirofull_20200317.RDS")
+enviro_row <- envirofull[envirofull$cellID==ID,]
+
 
 #set up the fixed phyoplankton spectrum
 phyto_fixed <- function(params, n, n_pp, n_other, rates, dt = 0.01, kappa = 10^enviro_row$phyto_int, lambda = 1-enviro_row$phyto_slope,...) {
@@ -93,10 +95,10 @@ length(which(mf.params@initial_n_pp>0)) == length(seq(-14.5,enviro_row$phyto_max
 Now do some fiddling to make the new MizerParams object match the ZooMSS parameters. Note: this chunk is adapted from `fZooMSS_setup.R`, found at https://github.com/MathMarEcol/ZooMSS/.
 
 ```{r}
-setZooMizerConstants <- function(params, Groups, input_params){
-#### CALCULATES CONSTANT BITS OF THE MODEL FUNCTIONS FOR EACH GROUP
+setZooMizerConstants <- function(params, Groups, sst){
+  #### CALCULATES CONSTANT BITS OF THE MODEL FUNCTIONS FOR EACH GROUP
   SearchVol <- getSearchVolume(params)
-  M_sb <- getExtMort(mf.params)
+  M_sb <- getExtMort(params)
   ZSpre <- 1 # senescence mortality prefactor
   ZSexp <- 0.3 # senescence mortality exponent
   
@@ -104,45 +106,44 @@ setZooMizerConstants <- function(params, Groups, input_params){
   prey_weight_matrix <- matrix(params@w_full, nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
   pred_weight_matrix <- matrix(params@w, nrow = length(params@w), ncol = length(params@w_full))
   
-  for(i in 1:nrow(params@species_params)){
+    for(i in 1:nrow(params@species_params)){
     ## Senescence mortality
     if(params@species_params$Type[i] == "Zooplankton"){
-      M_sb[i,] <- ZSpre*(params@w/(10^(params@species_params$w_mat[i])))^ZSexp
-      M_sb[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-      M_sb[i, 10^(params@species_params$w_mat[i]) > params@w] <- 0
+      M_sb[i,] <- ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
+      M_sb[i, params@species_params$w_max[i] < params@w] <- 0
+      M_sb[i, params@species_params$w_mat[i] > params@w] <- 0
     }
     
     if(params@species_params$Type[i] == "Fish"){
-      M_sb[i,] <- 0.1*ZSpre*(params@w/(10^(params@species_params$w_mat[i])))^ZSexp
-      M_sb[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-      M_sb[i, 10^(params@species_params$w_mat[i]) > params@w] <- 0
+      M_sb[i,] <- 0.1*ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
+      M_sb[i, params@species_params$w_max[i] < params@w] <- 0
+      M_sb[i, params@species_params$w_mat[i] > params@w] <- 0
     }
     
     ### Search volume
     SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$q[i]))
-    SearchVol[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-    SearchVol[i, 10^(params@species_params$w_min[i]) > params@w] <- 0
+    SearchVol[i, params@species_params$w_max[i] < params@w] <- 0
+    SearchVol[i, params@species_params$w_min[i] > params@w] <- 0
     
     ### Predation Kernels
     if(is.na(params@species_params$PPMRscale[i]) == FALSE){ # If group has an m-value (zooplankton)
       # Calculate PPMR for zooplankton, which changes according to body-size (Wirtz, 2012)
       D.z <- 2*(3*params@w*1e12/(4*pi))^(1/3) # convert body mass g to ESD (um)
       betas <- (exp(0.02*log(D.z)^2 - params@species_params$PPMRscale[i] + 1.832))^3 # Wirtz's equation
-      beta_mat <- matrix(betas, nrow = length(params@w), ncol = length(mf.params@w_full))
+      beta_mat <- matrix(betas, nrow = length(params@w), ncol = length(params@w_full))
       
       # Calculate feeding kernels
       pred_kernel[i, , ] <- exp(-0.5*(log((beta_mat*prey_weight_matrix)/
-                                     pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
+                                            pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
         sqrt(2*pi*params@species_params$FeedWidth[i]^2)
-      
       # The feeding kernel of filter feeders is not expected to change  with increasing size so we fix it here
       
       # if (param$fixed_filterPPMR == TRUE){
       if(i == 3){
-        pred_kernel[i, , ] <- matrix(pred_kernel[i,44,], nrow = length(params@w), ncol = length(mf.params@w_full), byrow = TRUE)
+        pred_kernel[i, , ] <- matrix(pred_kernel[i,44,], nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
       }
       if(i == 8){
-        pred_kernel[i, , ] <- matrix(pred_kernel[i,61,], nrow = length(params@w), ncol = length(mf.params@w_full), byrow = TRUE)
+        pred_kernel[i, , ] <- matrix(pred_kernel[i,61,], nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
       }
       # }
       
@@ -151,24 +152,44 @@ setZooMizerConstants <- function(params, Groups, input_params){
       
       # Calculate feeding kernels
       pred_kernel[i, , ] <- exp(-0.5*(log((beta_mat*prey_weight_matrix)/
-                                             pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
+                                            pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
         sqrt(2*pi*params@species_params$FeedWidth[i]^2)
     }
-
+    
   }
   
   #temperature effect 
-  temp_eff <-  matrix(2.^((input_params$sst - 30)/10), nrow = length(params@species_params$species), ncol = length(params@w))
+  temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(params@species_params$species), ncol = length(params@w))
   M_sb <- temp_eff * M_sb # Incorporate temp effect on senscence mortality
   
-params <- setExtMort(params, z0 = M_sb)
-params <- setSearchVolume(params, SearchVol)
-params <- setPredKernel(params, pred_kernel)
-
-return(params)
+  
+  params@initial_n_pp <- params@resource_params$kappa * params@w_full^(-params@resource_params$lambda)
+  params@initial_n_pp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
+  
+  
+  a_dynam <- (params@resource_params$kappa)*(params@w[1]^(2-params@resource_params$lambda)) # calculate coefficient for initial dynamic spectrum, so that N(w_phyto) equals N(w_dynam) at w[1]
+  
+  # Initial abundances form a continuation of the plankton spectrum, with an abundance slope of -1 (normalised abundance slop of -2)
+  tempN <- matrix(a_dynam*(params@w)^-2, nrow = nrow(params@species_params), ncol = length(params@w), byrow = TRUE)
+  props_z <- params@species_params$Prop[params@species_params$Type=="Zooplankton"] # Zooplankton proportions
+  tempN[params@species_params$Type=="Zooplankton",] <- props_z * tempN[params@species_params$Type=="Zooplankton",] # Set abundances of diff zoo groups based on smallest size class proportions
+  tempN[params@species_params$Type=="Fish",] <- (1/sum(params@species_params$Type=="Fish")) * tempN[params@species_params$Type=="Fish",] # Set abundandances of fish groups based on smallest size class proportions
+  
+  # For each group, set densities at w > Winf and w < Wmin to 0
+  tempN[unlist(tapply(round(log10(params@w), digits = 2), 1:length(params@w), function(wx,Winf) Winf < wx, Winf = log10(params@species_params$w_inf)))] <- 0
+  tempN[unlist(tapply(round(log10(params@w), digits = 2), 1:length(params@w), function(wx,Wmin) Wmin > wx, Wmin = log10(params@species_params$w_min)))] <- 0
+  dimnames(tempN) <- dimnames(params@initial_n)
+  params@initial_n <- tempN
+  
+  params <- setExtMort(params, z0 = M_sb)
+  params <- setSearchVolume(params, SearchVol)
+  params <- setPredKernel(params, pred_kernel)
+  
+  return(params)
 }
 
-mf.params <- setZooMizerConstants(params = mf.params, Groups = groups, input_params = enviro_row)
+
+mf.params <- setZooMizerConstants(params = mf.params, Groups = groups, sst= enviro_row$sst)
 
 
 ```
@@ -179,16 +200,16 @@ Try running it:
 
 mf.params <- setParams(mf.params)
 
-sim <- project(mf.params, t_max=100,dt = 0.01)
+sim <- project(mf.params)
 plot(sim) #note feeding level means satiation - 0 since there's no satiation in this model.
 plotlyBiomass(sim)
 #plotlyGrowthCurves(sim,species="macrozooplankton")
-plotlyFeedingLevel(sim)
+#plotlyFeedingLevel(sim)
 # feeding level satiation for some groups, except for the seabirds
 # macrozooplankton - they are not growing enough,why?
 #tuneParams(mf.params)
-plotlyGrowthCurves(sim,percentage = T)
-plotlySpectra(sim)
+#plotlyGrowthCurves(sim,percentage = T)
+plotlySpectra(sim, power = 1)
 ```
 
 
@@ -302,7 +323,7 @@ assignInNamespace("project_simple", new_project_simple, ns = "mizer")
 Now let's try that out:
 
 ```{r}
-sim2 <- project(mf.params, t_max = 100, dt = 0.01)
+sim2 <- project(mf.params, t_max = 100, dt = 001)
 plot(sim2)
 plotlySpectra(sim2, power = 0)
 ```
@@ -422,6 +443,8 @@ mf.params3 <- setRateFunction(mf.params3, "EReproAndGrowth", "new_EReproAndGrowt
 #fix up energy to reproduction
 mf.params3 <- setReproduction(mf.params3, repro_prop = matrix(0, nrow = nrow(mf.params3@psi), ncol = ncol(mf.params3@psi)))
 
+
+
 sim4 <- project(mf.params3, t_max = 100, dt = 0.01)
 plot(sim4)
 plotlySpectra(sim4, power = 0)
@@ -442,36 +465,48 @@ enviro <- readRDS("data/enviro_test20.RDS")
 zoomssgrid <- readRDS("zoomssgrid.rds")
 zoomssgrid <- zoomssgrid[enviro$CellID]
 
-fZooMSS_Biomass <- function(res, w) {
-   Biomass <- map(res, function(x) sweep(x, 2, w, '*')) # Biomass in grams
-   return(Biomass)
- }
+w <- matrix(hack@params@w, nrow = nrow(hack@params@species_params), ncol = length(hack@params@w), byrow = TRUE)
+dw <- matrix(hack@params@dw, nrow = nrow(hack@params@species_params), ncol = length(hack@params@dw), byrow = TRUE)
+
+#load in ZooMizer data for comparison
+zoomizergrid <- readRDS("test_grid.RDS")
+
+tmax <- dim(zoomizergrid[[1]]@n)[1]
+
+pzoomizer <- list()
+for (i in 1:length(zoomizergrid)) {
+  zoomizergrid[[i]]@n[tmax,,] <- apply(as.array(zoomizergrid[[i]]@n[ceiling(tmax/2):tmax,,]),c(2,3),'mean') #apples-to-apples comparison
+  pzoomizer[[i]] <- plotSpectra(zoomizergrid[[i]], time_range = tmax-1, power = 1)+labs(title = paste("ZooMizer plot",i))
+}
 
 #fill fake MizerSim object with ZooMSS data and plot
 pzoomss <- list()
 for (i in 1:length(zoomssgrid)) {
-   hack@n[i,,]<- zoomssgrid[[i]]
-   pzoomss[[i]] <- plotSpectra(hack, time_range = i, power = 0)+labs(title = paste("ZooMSS plot",i))
+   hack@n[i,,] <- zoomssgrid[[i]] / w
+   hack@n_pp[i,] <- zoomizergrid[[i]]@n_pp[1,]
+   pzoomss[[i]] <- plotSpectra(hack, time_range = i-1, power = 1)+labs(title = paste("ZooMSS plot",i))
 }
 
-w <- matrix(hack@params@w, nrow = nrow(hack@params@species_params), ncol = length(hack@params@w))
 
-#load in ZooMizer data and compare
-zoomizergrid <- readRDS("test_grid.RDS")
 
-pzoomizer <- list()
-for (i in 1:length(zoomizergrid)) {
-  zoomizergrid[[i]]@n[1001,,] <- apply(as.array(zoomizergrid[[i]]@n[502:1001,,]),c(2,3),'mean') #apples-to-apples comparison
-  pzoomizer[[i]] <- plotSpectra(zoomizergrid[[i]], time_range = 1000, power = 0)+labs(title = paste("ZooMizer plot",i))
-}
 
-pzoomss[[10]]
-pzoomizer[[10]]
 
-testdf <- data.frame(zoomsstcb = numeric(20),zoomizertcb = numeric(20))
+#have a look
+pzoomss[[ceiling(length(zoomizergrid))/2]]
+pzoomizer[[ceiling(length(zoomizergrid))/2]]
+
+#compare them all
+# p <- list(length(zoomizergrid)*2)
+# for (i in 1:length(zoomizergrid)) {
+#     p[[2*i-1]] <- pzoomss[[i]]
+#     p[[2*i]] <- pzoomizer[[i]]
+# }
+#p
+
+testdf <- data.frame(zoomsstcb = numeric(length(zoomizergrid)),zoomizertcb = numeric(length(zoomizergrid)))
 for (i in 1:nrow(testdf)) {
-testdf$zoomsstcb[i] = sum(hack@n[i,,]*w)
-testdf$zoomizertcb[i] = sum(zoomizergrid[[i]]@n[1001,,]*w)
+testdf$zoomsstcb[i] = sum(hack@n[i,,]*w*dw)
+testdf$zoomizertcb[i] = sum(zoomizergrid[[i]]@n[tmax,,]*w*dw)
 }
 
 (scatter <- ggplot(testdf, aes(x=log10(zoomsstcb), y=log10(zoomizertcb)))+
@@ -480,7 +515,7 @@ testdf$zoomizertcb[i] = sum(zoomizergrid[[i]]@n[1001,,]*w)
 
 ggsave("zoomss_zoomizer_comparison_tcb.png",scatter)
 
-testdf$chlo <- enviro$chlo
+testdf$chlo <- enviro$chlo[1:nrow(testdf)]
 (chlotcb <- ggplot(data=testdf, aes(x=log10(chlo),y=log10(zoomizertcb)))+
   geom_point())
 ggsave("zoomizer_tcb_vs_chlo.png", chlotcb)
