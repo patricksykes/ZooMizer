@@ -30,33 +30,13 @@ library(mizerExperimental)
 
 ```
 
-### Data
-Next, let's load in and check the data used in the ZooMSS model. TODO: add in some biomass data
-
-```{r}
-
-#read in group data
-groups <-read.csv("data/TestGroups_mizer.csv")
-groups$w_min <- 10^groups$w_min
-groups$w_inf <- 10^groups$w_inf
-groups$w_mat <- 10^groups$w_mat
-#groups<-merge(groups,dat,by.x="species",by.y="group",all=T)
-
-# have a look at plot
-# plot(groups$w_inf,groups$biomass.tperkm2,xlab="log Maximum Weight [g]", ylab=" log Total Biomass", log="xy",col="blue",pch=16)
-# text(groups$w_inf,groups$biomass.tperkm2,labels=groups$species,cex=0.5)
-
-# could plot the paramter allometries here to explore
-```
-
-
 ## Set-up mizer model
 
 Next let's read in the parameters from ZooMSS.
 
 ```{r}
-#read groups again for southern ocean model, this time subsetting key groups
-groups <-read.csv("data/TestGroups_mizer.csv")
+
+groups <-read_csv("data/TestGroups_mizer.csv")
 groups$w_min <- 10^groups$w_min #convert from log10 values
 groups$w_inf <- 10^groups$w_inf
 groups$w_mat <- 10^groups$w_mat
@@ -64,18 +44,9 @@ groups$h <- 1e50 # should be Inf, but that breaks the calculations. Massive valu
 groups$ks <- 0 #turn off standard metabolism
 #todo - ramp up constant repro for coexistence
 
-#groups <- readRDS("data/groups.RDS")[-1,]
-#check fails these tests:
-#groups$w_mat25 >= groups$w_mat #note we don't have w_mat25. Not sure if it's necessary/desirable. Probably not.
-groups$w_mat <= groups$w_min
-groups$w_inf <= groups$w_mat
-
-
-
 # read interaction matrix
 # get the interaction matrix - actually I think we can leave this out. Default is all 1s, which is the same as in ZooMSS. Included for completeness; it may be useful in future to keep this in.
 theta <- readRDS("data/zoomss_inter.rds")[,-1]
-#[-1,-1]
 
  
 ```
@@ -87,8 +58,10 @@ TODO: adjust parameters here.
 ```{r}
 
 
-ID <- 1 #index of environmental data to choose
-enviro_row <- readRDS("data/envirofull_20200317.RDS")[ID,]
+ID <- 223 #index of environmental data to choose
+envirofull <- readRDS("data/envirofull_20200317.RDS")
+enviro_row <- envirofull[envirofull$cellID==ID,]
+
 
 #set up the fixed phyoplankton spectrum
 phyto_fixed <- function(params, n, n_pp, n_other, rates, dt = 0.01, kappa = 10^enviro_row$phyto_int, lambda = 1-enviro_row$phyto_slope,...) {
@@ -101,13 +74,13 @@ mf.params <- newMultispeciesParams(species_params=groups,
                                    interaction=NULL, #NULL sets all to 1, no strict herbivores
                                    no_w = 178, #number of zoo+fish size classes;
                                    min_w_pp = 10^(-14.4), #minimum phyto size. Note: use -14.4, not -14.5, otherwise it makes an extra size class
-                                   w_pp_cutoff = 10^(enviro_row$phyto_max), #maximumplot phyto size
+                                   w_pp_cutoff = 10^(enviro_row$phyto_max), #maximum phyto size
                                    n = 0.7, #The allometric growth exponent used in ZooMSS
                                    z0pre = 1, #external mortality (senescence)
                                    z0exp = 0.3,
                                    resource_dynamics = "phyto_fixed",
                                    kappa = 10^(enviro_row$phyto_int), 
-                                   lambda = -enviro_row$phyto_slope+1,
+                                   lambda = 1-enviro_row$phyto_slope,
                                    RDD = constantRDD(species_params = groups) #first go at this
                                    #pred_kernel = ... #probably easiest to just import this/pre-calculate it, once dimensions are worked out
 )
@@ -122,10 +95,10 @@ length(which(mf.params@initial_n_pp>0)) == length(seq(-14.5,enviro_row$phyto_max
 Now do some fiddling to make the new MizerParams object match the ZooMSS parameters. Note: this chunk is adapted from `fZooMSS_setup.R`, found at https://github.com/MathMarEcol/ZooMSS/.
 
 ```{r}
-setZooMizerConstants <- function(params, Groups, input_params){
-#### CALCULATES CONSTANT BITS OF THE MODEL FUNCTIONS FOR EACH GROUP
+setZooMizerConstants <- function(params, Groups, sst){
+  #### CALCULATES CONSTANT BITS OF THE MODEL FUNCTIONS FOR EACH GROUP
   SearchVol <- getSearchVolume(params)
-  M_sb <- getExtMort(mf.params)
+  M_sb <- getExtMort(params)
   ZSpre <- 1 # senescence mortality prefactor
   ZSexp <- 0.3 # senescence mortality exponent
   
@@ -133,44 +106,44 @@ setZooMizerConstants <- function(params, Groups, input_params){
   prey_weight_matrix <- matrix(params@w_full, nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
   pred_weight_matrix <- matrix(params@w, nrow = length(params@w), ncol = length(params@w_full))
   
-  for(i in 1:nrow(params@species_params)){
+    for(i in 1:nrow(params@species_params)){
     ## Senescence mortality
     if(params@species_params$Type[i] == "Zooplankton"){
-      M_sb[i,] <- ZSpre*(params@w/(10^(params@species_params$w_mat[i])))^ZSexp
-      M_sb[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-      M_sb[i, 10^(params@species_params$w_mat[i]) > params@w] <- 0
+      M_sb[i,] <- ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
+      M_sb[i, params@species_params$w_max[i] < params@w] <- 0
+      M_sb[i, params@species_params$w_mat[i] > params@w] <- 0
     }
     
     if(params@species_params$Type[i] == "Fish"){
-      M_sb[i,] <- 0.1*ZSpre*(params@w/(10^(params@species_params$w_mat[i])))^ZSexp
-      M_sb[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-      M_sb[i, 10^(params@species_params$w_mat[i]) > params@w] <- 0
+      M_sb[i,] <- 0.1*ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
+      M_sb[i, params@species_params$w_max[i] < params@w] <- 0
+      M_sb[i, params@species_params$w_mat[i] > params@w] <- 0
     }
     
     ### Search volume
-    SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$gamma[i]))
-    SearchVol[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-    SearchVol[i, 10^(params@species_params$w_min[i]) > params@w] <- 0
+    SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$q[i]))
+    SearchVol[i, params@species_params$w_max[i] < params@w] <- 0
+    SearchVol[i, params@species_params$w_min[i] > params@w] <- 0
     
     ### Predation Kernels
     if(is.na(params@species_params$PPMRscale[i]) == FALSE){ # If group has an m-value (zooplankton)
       # Calculate PPMR for zooplankton, which changes according to body-size (Wirtz, 2012)
       D.z <- 2*(3*params@w*1e12/(4*pi))^(1/3) # convert body mass g to ESD (um)
       betas <- (exp(0.02*log(D.z)^2 - params@species_params$PPMRscale[i] + 1.832))^3 # Wirtz's equation
-      beta_mat <- matrix(betas, nrow = length(params@w), ncol = length(mf.params@w_full))
+      beta_mat <- matrix(betas, nrow = length(params@w), ncol = length(params@w_full))
       
       # Calculate feeding kernels
       pred_kernel[i, , ] <- exp(-0.5*(log((beta_mat*prey_weight_matrix)/
-                                     pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
+                                            pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
         sqrt(2*pi*params@species_params$FeedWidth[i]^2)
       # The feeding kernel of filter feeders is not expected to change  with increasing size so we fix it here
       
       # if (param$fixed_filterPPMR == TRUE){
       if(i == 3){
-        pred_kernel[i, , ] <- matrix(pred_kernel[i,44,], nrow = length(params@w), ncol = length(mf.params@w_full), byrow = TRUE)
+        pred_kernel[i, , ] <- matrix(pred_kernel[i,44,], nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
       }
       if(i == 8){
-        pred_kernel[i, , ] <- matrix(pred_kernel[i,61,], nrow = length(params@w), ncol = length(mf.params@w_full), byrow = TRUE)
+        pred_kernel[i, , ] <- matrix(pred_kernel[i,61,], nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
       }
       # }
       
@@ -179,24 +152,44 @@ setZooMizerConstants <- function(params, Groups, input_params){
       
       # Calculate feeding kernels
       pred_kernel[i, , ] <- exp(-0.5*(log((beta_mat*prey_weight_matrix)/
-                                             pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
+                                            pred_weight_matrix)/params@species_params$FeedWidth[i])^2)/
         sqrt(2*pi*params@species_params$FeedWidth[i]^2)
     }
-
+    
   }
   
   #temperature effect 
-  temp_eff <-  matrix(2.^((input_params$sst - 30)/10), nrow = length(params@species_params$species), ncol = length(params@w))
+  temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(params@species_params$species), ncol = length(params@w))
   M_sb <- temp_eff * M_sb # Incorporate temp effect on senscence mortality
   
-params <- setExtMort(params, z0 = M_sb)
-params <- setSearchVolume(params, SearchVol)
-params <- setPredKernel(params, pred_kernel)
-
-return(params)
+  
+  params@initial_n_pp <- params@resource_params$kappa * params@w_full^(-params@resource_params$lambda)
+  params@initial_n_pp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
+  
+  
+  a_dynam <- (params@resource_params$kappa)*(params@w[1]^(2-params@resource_params$lambda)) # calculate coefficient for initial dynamic spectrum, so that N(w_phyto) equals N(w_dynam) at w[1]
+  
+  # Initial abundances form a continuation of the plankton spectrum, with an abundance slope of -1 (normalised abundance slop of -2)
+  tempN <- matrix(a_dynam*(params@w)^-2, nrow = nrow(params@species_params), ncol = length(params@w), byrow = TRUE)
+  props_z <- params@species_params$Prop[params@species_params$Type=="Zooplankton"] # Zooplankton proportions
+  tempN[params@species_params$Type=="Zooplankton",] <- props_z * tempN[params@species_params$Type=="Zooplankton",] # Set abundances of diff zoo groups based on smallest size class proportions
+  tempN[params@species_params$Type=="Fish",] <- (1/sum(params@species_params$Type=="Fish")) * tempN[params@species_params$Type=="Fish",] # Set abundandances of fish groups based on smallest size class proportions
+  
+  # For each group, set densities at w > Winf and w < Wmin to 0
+  tempN[unlist(tapply(round(log10(params@w), digits = 2), 1:length(params@w), function(wx,Winf) Winf < wx, Winf = log10(params@species_params$w_inf)))] <- 0
+  tempN[unlist(tapply(round(log10(params@w), digits = 2), 1:length(params@w), function(wx,Wmin) Wmin > wx, Wmin = log10(params@species_params$w_min)))] <- 0
+  dimnames(tempN) <- dimnames(params@initial_n)
+  params@initial_n <- tempN
+  
+  params <- setExtMort(params, z0 = M_sb)
+  params <- setSearchVolume(params, SearchVol)
+  params <- setPredKernel(params, pred_kernel)
+  
+  return(params)
 }
 
-mf.params <- setZooMizerConstants(params = mf.params, Groups = groups, input_params = enviro_row)
+
+mf.params <- setZooMizerConstants(params = mf.params, Groups = groups, sst= enviro_row$sst)
 
 
 ```
@@ -207,16 +200,16 @@ Try running it:
 
 mf.params <- setParams(mf.params)
 
-sim <- project(mf.params, t_max=100,dt = 0.01)
+sim <- project(mf.params)
 plot(sim) #note feeding level means satiation - 0 since there's no satiation in this model.
 plotlyBiomass(sim)
 #plotlyGrowthCurves(sim,species="macrozooplankton")
-plotlyFeedingLevel(sim)
+#plotlyFeedingLevel(sim)
 # feeding level satiation for some groups, except for the seabirds
 # macrozooplankton - they are not growing enough,why?
 #tuneParams(mf.params)
-plotlyGrowthCurves(sim,percentage = T)
-plotlySpectra(sim)
+#plotlyGrowthCurves(sim,percentage = T)
+plotlySpectra(sim, power = 1)
 ```
 
 
@@ -228,6 +221,8 @@ where $N_i(w)$ is the density of species $i$ in weight class $w$, and $prop(i)$ 
 In mizer, reproduction is linked to metabolism. The abundance in the smallest size class is proportional to the energy available to mature individuals for reproduction - i.e. the energy left over after subtracting metabolic costs (including energy to support growth) from the energy assimilated (by mature individuals) from feeding on prey.
 
 Now, to recreate this in mizer, we need to rewrite mizer's `project_simple()` function. We do this by making a new function, `new_project_simple()`, and using it in place of the default one:
+
+TODO: insert remaining temperature effects in here too.
 
 ```{r}
 new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps, 
@@ -328,7 +323,7 @@ assignInNamespace("project_simple", new_project_simple, ns = "mizer")
 Now let's try that out:
 
 ```{r}
-sim2 <- project(mf.params, t_max = 100, dt = 0.01)
+sim2 <- project(mf.params, t_max = 100, dt = 001)
 plot(sim2)
 plotlySpectra(sim2, power = 0)
 ```
@@ -340,6 +335,9 @@ Still missing is the differential prey nutrition based on prey carbon content. W
 #set up matrix of pred nutrition given prey, dims (pred species) x (prey species)
 assim_eff = matrix(mf.params@species_params$GrossGEscale * mf.params@species_params$Carbon, nrow = nrow(mf.params@species_params), ncol = nrow(mf.params@species_params))
 get_filterfeeders <- which(mf.params@species_params$FeedType == "FilterFeeder")
+
+cc_phyto <- 0.1 #carbon content of phytoplankton
+assim_phyto <- mf.params@species_params$GrossGEscale * cc_phyto #assimilation efficiency when eating phytoplankton
 
 #TODO: make the assim_eff a parameter in the MizerParams object
 for (i in get_filterfeeders) {
@@ -376,7 +374,7 @@ new_Encounter <- function(params, n, n_pp, n_other, t, ...) {
             c(1, 3), n_eff_prey, "*", check.margin = FALSE), dims = 2)
         # Eating the background
         # This line is a bottle neck
-        phi_prey_background <- params@species_params$interaction_resource *
+        phi_prey_background <- assim_phyto * params@species_params$interaction_resource *
             rowSums(sweep(
             params@pred_kernel, 3, params@dw_full * params@w_full * n_pp,
             "*", check.margin = FALSE), dims = 2)
@@ -403,244 +401,128 @@ plot(sim3)
 plotlySpectra(sim3, power=0)
 ```
 
-<!-- ```{r} -->
+Looking good, but we still need to include the temperature effects on the other processes.
 
-<!-- ####### psi function -->
+```{r}
 
-<!-- #   # change allocation to reproduction = check for endotherms/determinate growers (should be 1 at wmat not winf) -->
-<!-- #  psi_r=20 -->
-<!-- #  params@psi[] <- unlist(tapply(params@w,1:length(params@w),function(wx,winf,wmat,n){ -->
-<!-- #    ((1 + (wx/(wmat))^-psi_r)^-1) * (wx/winf)^(1-n)},winf=params@species_params$w_inf,wmat=params@species_params$w_mat,n=params@n)) -->
-<!-- # # # set w < 1% of wmat to 0 -->
-<!-- #  params@psi[unlist(tapply(params@w,1:length(params@w),function(wx,wmat)wx<(wmat*0.01),wmat=params@species_params$w_mat))] <- 0 -->
-<!-- # # # set all m > m to 1 # check this is right... -->
-<!-- #  params@psi[unlist(tapply(params@w,1:length(params@w),function(wx,winf)(wx/winf)>1,winf=params@species_params$w_inf))] <- 1 -->
-<!-- # -->
-<!-- # ########## erepro -->
-<!-- # -->
-<!-- #  #and erepro - should this decline with winf or shoudl it just be a very small number 0.005? -->
-<!-- # #should this actually be closer to 1 for mammals? -->
-<!-- # params@species_params$erepro <-0.05*params@species_params$w_inf^(-0.75) -->
-<!-- # # need to think about how this sounds in writing -->
-<!-- # -->
-<!-- # ######### juvenile mortality -->
-<!-- # -->
-<!-- # ## add declining intraspecific juvenile mortality to background mortality -->
-<!-- # for (i in 1: length(params@species_params$species)) params@mu_b[i,] <- params@mu_b[i,]  + 0.1*params@w^-0.25 -->
-<!-- # -->
+temp_eff <-  matrix(2.^((enviro_row$sst - 30)/10), nrow = length(mf.params@species_params$species), ncol = length(mf.params@w))
 
+new_PredRate <- function (params, n, n_pp, n_other, t, feeding_level, ...) 
+{
+    no_sp <- dim(params@interaction)[1]
+    no_w <- length(params@w)
+    no_w_full <- length(params@w_full)
+    if (length(params@ft_pred_kernel_p) == 1) {
+        n_total_in_size_bins <- sweep(n, 2, params@dw, "*", 
+            check.margin = FALSE)
+        pred_rate <- sweep(params@pred_kernel, c(1, 2), (1 - 
+            feeding_level) * params@search_vol * n_total_in_size_bins * temp_eff, 
+            "*", check.margin = FALSE)
+        pred_rate <- colSums(aperm(pred_rate, c(2, 1, 3)), dims = 1)
+        return(pred_rate)
+    }
+    idx_sp <- (no_w_full - no_w + 1):no_w_full
+    Q <- matrix(0, nrow = no_sp, ncol = no_w_full)
+    Q[, idx_sp] <- sweep((1 - feeding_level) * params@search_vol * temp_eff *
+        n, 2, params@dw, "*")
+    pred_rate <- Re(t(mvfft(t(params@ft_pred_kernel_p) * mvfft(t(Q)), 
+        inverse = TRUE)))/no_w_full
+    return(pred_rate * params@ft_mask)
+}
 
-<!-- ``` -->
+new_EReproAndGrowth <- function (params, n, n_pp, n_other, t, encounter, feeding_level, 
+    ...) 
+{
+    sweep((1 - feeding_level) * encounter * temp_eff, 1, params@species_params$alpha, 
+        "*", check.margin = FALSE) - params@metab
+}
 
-<!-- Let's take a look now. -->
-<!-- ```{r} -->
+mf.params3 <- setRateFunction(mf.params2, "PredRate", "new_PredRate")
+mf.params3 <- setRateFunction(mf.params3, "EReproAndGrowth", "new_EReproAndGrowth")
 
-<!-- params<- setParams(params, pred_kernel = pred_kern,kappa=1e6) -->
+#fix up energy to reproduction
+mf.params3 <- setReproduction(mf.params3, repro_prop = matrix(0, nrow = nrow(mf.params3@psi), ncol = ncol(mf.params3@psi)))
 
-<!-- # run again, intialised from the final state above -->
-<!-- new.mf<-project(params,t_max=100,initial_n=sim@n[500,,],initial_n_pp=sim@n_pp[500,]) -->
 
-<!-- #plot(new.mf) -->
 
-<!-- # run again for longer, from the final state above -->
-<!-- #new.mf<-project(params,t_max=500,initial_n=new.mf@n[100,,],initial_n_pp=new.mf@n_pp[100,]) -->
+sim4 <- project(mf.params3, t_max = 100, dt = 0.01)
+plot(sim4)
+plotlySpectra(sim4, power = 0)
 
-<!-- plot(new.mf)   -->
-<!-- plotlyFeedingLevel(new.mf)   -->
-<!-- plotlyGrowthCurves(new.mf,percentage = T)  -->
-<!-- plotlyBiomass(new.mf,percentage = T)  -->
-<!-- plotBioData(new.mf,dat) -->
+```
 
-<!-- ``` -->
 
-<!-- That helps baleen whales - and impact macrozoooplankton, but some of the predator groups are still not getting enough food. -->
+Something is not quite right...Here's a very hacky way to get the comparison...I've run the model to 1000 years with `dt=0.01` for 20 different combinations of SST and chlorophyll-a and matched them to the relevant runs of ZooMSS (without diffusion).
 
-<!-- ### Prey size selection -->
+```{r}
 
-<!-- What range of values should the seabirds have - should we use a box kernel for those groups? I seem to remember there are distinct size ranges for the different seabirds. -->
+require(ggplot2)
 
-<!-- ### Metabolic costs -->
+hack <- sim2 #making a "fake" MizerSim object that we can use plots on.
 
-<!-- Are these correct for the different groups? What about the maximum intake rate coefficients - h? Do these sclae in the way that is expected for endotherms? -->
+#match ZooMSS data to that collected from zoomizer
+enviro <- readRDS("data/enviro_test20.RDS")
+zoomssgrid <- readRDS("zoomssgrid.rds")
+zoomssgrid <- zoomssgrid[enviro$CellID]
 
-<!-- ### Maturation and reproduction -->
+w <- matrix(hack@params@w, nrow = nrow(hack@params@species_params), ncol = length(hack@params@w), byrow = TRUE)
+dw <- matrix(hack@params@dw, nrow = nrow(hack@params@species_params), ncol = length(hack@params@dw), byrow = TRUE)
 
-<!-- We need to check the assumptions about maturation and reproduction for the non-fish groups. -->
+#load in ZooMizer data for comparison
+zoomizergrid <- readRDS("test_grid.RDS")
 
-<!-- The marine mammals and seabirds show stop growth once they reach maturation size. Need to make sure some functioanl groups are not mixtures of these type of taxa. Therefore matruation size and asymptotic size are very close. They should probably alos follow a sharp transition to maturation size, as they follow determinate growth. -->
+tmax <- dim(zoomizergrid[[1]]@n)[1]
 
-<!-- Density dependence: Erepro, Rmax. -->
+pzoomizer <- list()
+for (i in 1:length(zoomizergrid)) {
+  zoomizergrid[[i]]@n[tmax,,] <- apply(as.array(zoomizergrid[[i]]@n[ceiling(tmax/2):tmax,,]),c(2,3),'mean') #apples-to-apples comparison
+  pzoomizer[[i]] <- plotSpectra(zoomizergrid[[i]], time_range = tmax-1, power = 1)+labs(title = paste("ZooMizer plot",i))
+}
 
-<!-- Should we change the reproduction function to not use the stock-recruitmnet assumption? There are other options now:https://sizespectrum.org/mizer/reference/index.html#section-density-dependent-reproduction -->
+#fill fake MizerSim object with ZooMSS data and plot
+pzoomss <- list()
+for (i in 1:length(zoomssgrid)) {
+   hack@n[i,,] <- zoomssgrid[[i]] / w
+   hack@n_pp[i,] <- zoomizergrid[[i]]@n_pp[1,]
+   pzoomss[[i]] <- plotSpectra(hack, time_range = i-1, power = 1)+labs(title = paste("ZooMSS plot",i))
+}
 
 
-<!-- ### Starvation mortality -->
 
-<!-- Should we include startvation morality ? This would free up competition for resources.... -->
 
 
+#have a look
+pzoomss[[ceiling(length(zoomizergrid))/2]]
+pzoomizer[[ceiling(length(zoomizergrid))/2]]
 
-<!-- ### Other sources of mortality -->
+#compare them all
+# p <- list(length(zoomizergrid)*2)
+# for (i in 1:length(zoomizergrid)) {
+#     p[[2*i-1]] <- pzoomss[[i]]
+#     p[[2*i]] <- pzoomizer[[i]]
+# }
+#p
 
-<!-- Currently assumong a fairly low backgournd "other" moratlity that is constant within fucntioan group but declines with aymptotic size (Brown et al. 2004). Sensescence mortality has been used in other work, but is tricky to parameterise. Though this might be needed for squid or other life histories that dies after reproduction. -->
+testdf <- data.frame(zoomsstcb = numeric(length(zoomizergrid)),zoomizertcb = numeric(length(zoomizergrid)))
+for (i in 1:nrow(testdf)) {
+testdf$zoomsstcb[i] = sum(hack@n[i,,]*w*dw)
+testdf$zoomizertcb[i] = sum(zoomizergrid[[i]]@n[tmax,,]*w*dw)
+}
 
-<!-- ### Plankton dynamics -->
+(scatter <- ggplot(testdf, aes(x=log10(zoomsstcb), y=log10(zoomizertcb)))+
+  geom_point()+
+  geom_smooth(method = 'lm'))
 
-<!-- Currently we use the default plankton dynamics and parameter values. What should these be for the Southern Ocean? Do we have any information from regional shelf sea biogeochmical models? The previous information of satellite data seem limited.  -->
+ggsave("zoomss_zoomizer_comparison_tcb.png",scatter)
 
-<!-- So, we decided to ask the question: What does the plankton need to be to feed the rest of the size spectrum (at equlibrium)? Does anyone have size spectrum slopes and intercepts for this system? (Angus Atkinson?) -->
+testdf$chlo <- enviro$chlo[1:nrow(testdf)]
+(chlotcb <- ggplot(data=testdf, aes(x=log10(chlo),y=log10(zoomizertcb)))+
+  geom_point())
+ggsave("zoomizer_tcb_vs_chlo.png", chlotcb)
 
-<!-- However, we could also incude stochasticity...more work though example here: https://rpubs.com/gustav/plankton-anchovy -->
+fit <- lm(testdf$zoomizertcb~testdf$zoomsstcb)
 
-<!-- Samik Datta and I have also looked at seasonality - hopefully will build extension, but how important for this? -->
 
-<!-- # Model Calibration  -->
+```
 
-<!-- WARNING: BELOW IS UNFINISHED AND DOES NOT CURRENTLY WORK. SHOULD WE START SIMPLER BASIC CALIBRATION ? I HAVE NOT WORKED OUT  MIKE'S METHOD YET. -->
 
-<!-- Rather than continue to manually adjust and tune the parameters we will try to automatically calibrate the model with data and estimate our uncertain parameters. We are particularly uncertian about: kappa ( the satellite data used as  inputs does not appear to be enough to keep the zooplankton  grooups alive), Rmax( this will influence the biomass of each group) Here, we will use an inverse calibraion where we have population level biomass density data for 6 of the marine mammal and seabird groups (obtained from the inputs for an EcoPath model).  -->
-
-<!-- ```{r} -->
-<!-- # Step 0. Set up function to run model and output the predicted log biomasses -->
-
-<!-- runmodel<-function(theta,parms=params,delta_t=0.1){# set up and run! -->
-<!-- # change the paramters values that we want to estimate/calibrate -->
-<!-- parms@species_params$R_max<- theta[1]*parms@species_params$w_inf^theta[2] -->
-<!-- kappa <- theta[3] -->
-<!-- backmort <- theta[4] -->
-<!-- parms<-setParams(parms,kappa=kappa,z0pre = backmort) -->
-<!-- #parms<- setPredKernel(parms, pred_kernel) -->
-<!-- sim<- project(parms,dt=delta_t,t_max = 100) -->
-<!-- # output the biomass denisty in terms of tonnes per km2 -->
-<!-- # assume model is set up for an area of 1km2 -->
-<!-- # this will output the biomass at last time step - do we need a time-average? -->
-<!-- sim_logbiomass<-log(getBiomass(sim)[dim(sim@n)[1],]) - log(1e6) -->
-<!-- return(sim_logbiomass) -->
-<!-- # do we also want to pass the equilibrium n and n_pp from last iteration? -->
-<!-- } -->
-<!-- #test-run -->
-
-<!-- theta <- c(1e2,-1.5,1e5,0.1) -->
-<!-- runmodel(theta = theta,parms=mf.params) -->
-<!-- ``` -->
-
-
-<!-- ```{r} -->
-<!-- # set up error function to compare predictions with observations (only need range of observations) -->
-<!-- dat<-log(c(rep(NA,4),0.003451, 0.015580,NA,NA,0.258995,0.008246,0.021900,0.141530)) -->
-<!-- names(dat) <-params@species_params$species -->
-
-<!-- sse <- function(theta, params=params,dat=dat) { -->
-<!-- pred <- runmodel(theta,params) -->
-<!-- # sum of squared errors, here on log-scale of predictions and data (can change this) -->
-<!-- discrep <- pred[!is.na(dat)] - dat[!is.na(dat)] -->
-<!-- return(sum(discrep^2)) -->
-<!-- } -->
-<!-- err<-sse(theta,mf.params,dat) -->
-<!-- #test -->
-<!-- err -->
-<!-- ``` -->
-
-
-
-
-<!-- We could skip ahead to  optimisation here to simply find the "best" single parameter values given the model and the data. Or carry out more advance Bayeisan methods. Instead, to illustrate how this works and to examine the error surface, we will set up a simple grid of parameters. Because the models runs are not actually dependent on each other (they are sequential), we can also do this much more quickly with parallel computing.  -->
-
-<!-- ```{r} -->
-
-
-<!-- # below not working -->
-
-
-
-<!-- # two parameter grid -->
-<!-- kappa <- seq(from=0.05,to=0.1,by=0.05) -->
-<!-- effort <- seq(from=0,to=2,by=0.1) -->
-<!-- grid <- expand.grid(kappa=kappa,effort=effort) -->
-<!-- grid$SSE <- apply(grid,1,f) -->
-
-
-
-<!-- #optimisation -->
-<!-- vals<-optim(par=c(1e3,0.1),sse,method ="SANN") -->
-
-<!-- # two parameter grid -->
-<!-- kappa <- seq(from=0.05,to=0.1,by=0.05) -->
-<!-- mort <- seq(from=0,to=2,by=0.1) -->
-<!-- grid <- expand.grid(kappa=kappa,mort=mort) -->
-<!-- grid$SSE <- apply(grid,1,sse) -->
-
-
-<!-- ``` -->
-
-
-
-<!-- ###### Bayesian in a week -->
-
-
-<!-- ```{r} -->
-<!-- ## Step 1. generate parameter sets to sample and plug in to model -->
-<!-- library(randtoolbox) -->
-<!-- library(boot) -->
-<!-- #### generate Round  1 -->
-<!-- theta <- sobol(n = 20000, dim = 26) -->
-<!-- for(i in 1:12){ -->
-<!--   # Rmax -->
-<!--   theta[,i] <- c(10,10,14,18,12,10,14,15)+ theta[,i] * c(20,19,16,13,18,20,16,15) -->
-<!-- } -->
-<!--   #erepro -->
-<!-- for(i in 13:24){ -->
-<!--   theta[,i] <-  inv.logit(-5 + theta[,i] * 5) -->
-<!-- } -->
-<!--  #kappa -->
-<!-- theta[,25] <- 5 + theta[,25] * 25 -->
-
-<!--  #background mort -->
-<!-- theta[,26] <- inv.logit(-5 + theta[,26] * 5) -->
-
-
-<!-- ``` -->
-
-
-
-<!-- ```{r} -->
-<!-- #### Run Model (could set up on cluster, but nice to have prgress bar) -->
-
-<!-- library(pbapply) -->
-<!-- round_1 <-  pbapply(theta,1,runmodel, parms) -->
-<!-- save(theta,round_1,file="data/round1.Rdata") -->
-
-<!-- ``` -->
-
-<!-- ```{r} -->
-<!-- # set up error function to compare predictions with observations (only need range of observations) -->
-<!-- ## Calculate the difference between the simulated catches and the observations. plot the results -->
-<!-- load("data/round1.Rdata") -->
-<!-- difs<- pbsapply(1:nrow(theta),function(x){colSums((matrix(round_1[,x],ncol=8) - log(dat[,-1]))^2,na.rm=T)}) -->
-
-
-<!-- ``` -->
-
-<!-- ```{r} -->
-<!-- # build emulator on diffs -->
-<!-- ``` -->
-
-
-<!-- ```{r} -->
-<!-- # sample and cheick params work -->
-<!-- ``` -->
-
-
-<!-- ```{r} -->
-<!-- # MCMC - posterior -->
-<!-- ``` -->
-
-
-<!-- ```{r} -->
-<!-- # resample posterior and compare emulator wth mizer (get importance weightings) -->
-<!-- ``` -->
-
-
-<!-- ```{r} -->
-<!-- # resample posterior accordingto weights & run mize scenarios -->
-<!-- ``` -->

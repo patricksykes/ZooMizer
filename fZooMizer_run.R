@@ -1,7 +1,7 @@
 phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa=params@resource_params$kappa, lambda=params@resource_params$lambda, ... ) {
-  n_pp <- kappa*params@w_full^(-lambda) #returns the fixed spectrum at every time step
-  n_pp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
-  return(n_pp)
+  npp <- kappa*params@w_full^(-lambda) #returns the fixed spectrum at every time step
+  npp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
+  return(npp)
 }
 
 setZooMizerConstants <- function(params, Groups, sst){
@@ -15,24 +15,24 @@ setZooMizerConstants <- function(params, Groups, sst){
   prey_weight_matrix <- matrix(params@w_full, nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
   pred_weight_matrix <- matrix(params@w, nrow = length(params@w), ncol = length(params@w_full))
   
-  for(i in 1:nrow(params@species_params)){
+    for(i in 1:nrow(params@species_params)){
     ## Senescence mortality
     if(params@species_params$Type[i] == "Zooplankton"){
-      M_sb[i,] <- ZSpre*(params@w/(10^(params@species_params$w_mat[i])))^ZSexp
-      M_sb[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-      M_sb[i, 10^(params@species_params$w_mat[i]) > params@w] <- 0
+      M_sb[i,] <- ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
+      M_sb[i, params@species_params$w_max[i] < params@w] <- 0
+      M_sb[i, params@species_params$w_mat[i] > params@w] <- 0
     }
     
     if(params@species_params$Type[i] == "Fish"){
-      M_sb[i,] <- 0.1*ZSpre*(params@w/(10^(params@species_params$w_mat[i])))^ZSexp
-      M_sb[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-      M_sb[i, 10^(params@species_params$w_mat[i]) > params@w] <- 0
+      M_sb[i,] <- 0.1*ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
+      M_sb[i, params@species_params$w_max[i] < params@w] <- 0
+      M_sb[i, params@species_params$w_mat[i] > params@w] <- 0
     }
     
     ### Search volume
-    SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$gamma[i]))
-    SearchVol[i, 10^(params@species_params$w_max[i]) < params@w] <- 0
-    SearchVol[i, 10^(params@species_params$w_min[i]) > params@w] <- 0
+    SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$q[i]))
+    SearchVol[i, params@species_params$w_max[i] < params@w] <- 0
+    SearchVol[i, params@species_params$w_min[i] > params@w] <- 0
     
     ### Predation Kernels
     if(is.na(params@species_params$PPMRscale[i]) == FALSE){ # If group has an m-value (zooplankton)
@@ -70,6 +70,25 @@ setZooMizerConstants <- function(params, Groups, sst){
   #temperature effect 
   temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(params@species_params$species), ncol = length(params@w))
   M_sb <- temp_eff * M_sb # Incorporate temp effect on senscence mortality
+  
+  
+  params@initial_n_pp <- params@resource_params$kappa * params@w_full^(-params@resource_params$lambda)
+  params@initial_n_pp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
+  
+  
+  a_dynam <- (params@resource_params$kappa)*(params@w[1]^(2-params@resource_params$lambda)) # calculate coefficient for initial dynamic spectrum, so that N(w_phyto) equals N(w_dynam) at w[1]
+  
+  # Initial abundances form a continuation of the plankton spectrum, with a slope of -1
+  tempN <- matrix(a_dynam*(params@w)^-2, nrow = nrow(params@species_params), ncol = length(params@w), byrow = TRUE)
+  props_z <- params@species_params$Prop[params@species_params$Type=="Zooplankton"] # Zooplankton proportions
+  tempN[params@species_params$Type=="Zooplankton",] <- props_z * tempN[params@species_params$Type=="Zooplankton",] # Set abundances of diff zoo groups based on smallest size class proportions
+  tempN[params@species_params$Type=="Fish",] <- (1/sum(params@species_params$Type=="Fish")) * tempN[params@species_params$Type=="Fish",] # Set abundandances of fish groups based on smallest size class proportions
+  
+  # For each group, set densities at w > Winf and w < Wmin to 0
+  tempN[unlist(tapply(round(log10(params@w), digits = 2), 1:length(params@w), function(wx,Winf) Winf < wx, Winf = log10(params@species_params$w_inf)))] <- 0
+  tempN[unlist(tapply(round(log10(params@w), digits = 2), 1:length(params@w), function(wx,Wmin) Wmin > wx, Wmin = log10(params@species_params$w_min)))] <- 0
+  dimnames(tempN) <- dimnames(params@initial_n)
+  params@initial_n <- tempN
   
   params <- setExtMort(params, z0 = M_sb)
   params <- setSearchVolume(params, SearchVol)
@@ -169,7 +188,7 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
       n[i,params@w_min_idx[i]] <- params@species_params$Prop[i] * sum(n[-i,params@w_min_idx[i]])
     }
     if(params@species_params$Type[i] == "Fish"){
-      n[i,params@w_min_idx[i]] <- 1/3 * sum(n[1:9,params@w_min_idx[i]])
+      n[i,params@w_min_idx[i]] <- 1/length(which(params@species_params$Type=="Fish")) * sum(n[which(params@species_params$Type!="Fish"),params@w_min_idx[i]])
     }
   }
   
@@ -207,7 +226,7 @@ new_Encounter <- function(params, n, n_pp, n_other, t, ...) {
     c(1, 3), n_eff_prey, "*", check.margin = FALSE), dims = 2)
   # Eating the background
   # This line is a bottle neck
-  phi_prey_background <- params@species_params$interaction_resource *
+  phi_prey_background <- assim_phyto * params@species_params$interaction_resource *
     rowSums(sweep(
       params@pred_kernel, 3, params@dw_full * params@w_full * n_pp,
       "*", check.margin = FALSE), dims = 2)
@@ -224,6 +243,41 @@ new_Encounter <- function(params, n, n_pp, n_other, t, ...) {
                    component = names(params@other_encounter)[[i]], ...))
   }
   
+  return(encounter)
+}
+
+new_PredRate <- function (params, n, n_pp, n_other, t, feeding_level, ...) 
+{
+  no_sp <- dim(params@interaction)[1]
+  no_w <- length(params@w)
+  no_w_full <- length(params@w_full)
+  
+  if (length(params@ft_pred_kernel_p) == 1) {
+    n_total_in_size_bins <- sweep(n, 2, params@dw, "*", 
+                                  check.margin = FALSE)
+    pred_rate <- sweep(params@pred_kernel, c(1, 2), (1 - 
+                                                       feeding_level) * params@search_vol * n_total_in_size_bins * params@other_params$temp_eff, 
+                       "*", check.margin = FALSE)
+    pred_rate <- colSums(aperm(pred_rate, c(2, 1, 3)), dims = 1)
+    return(pred_rate)
+  }
+  idx_sp <- (no_w_full - no_w + 1):no_w_full
+  Q <- matrix(0, nrow = no_sp, ncol = no_w_full)
+  Q[, idx_sp] <- sweep((1 - feeding_level) * params@search_vol * params@other_params$temp_eff *
+                         n, 2, params@dw, "*")
+  pred_rate <- Re(t(mvfft(t(params@ft_pred_kernel_p) * mvfft(t(Q)), 
+                          inverse = TRUE)))/no_w_full
+  return(pred_rate * params@ft_mask)
+}
+
+new_EReproAndGrowth <- function (params, n, n_pp, n_other, t, encounter, feeding_level, ...) 
+{
+  sweep((1 - feeding_level) * encounter * params@other_params$temp_eff, 1, params@species_params$alpha, 
+        "*", check.margin = FALSE) - params@metab
+}
+
+newFeedingLevel <- function (params, n, n_pp, n_other, t, encounter, ...) 
+{
   return(encounter)
 }
 
@@ -248,7 +302,7 @@ fZooMizer_run <- function(groups, input){
                                      interaction=NULL, #NULL sets all to 1, no strict herbivores
                                      no_w = 178, #number of zoo+fish size classes;
                                      min_w_pp = 10^(-14.4), #minimum phyto size. Note: use -14.4, not -14.5, otherwise it makes an extra size class
-                                     w_pp_cutoff = 10^(input$phyto_max), #maximumplot phyto size
+                                     w_pp_cutoff = 10^(input$phyto_max), #maximum phyto size
                                      n = 0.7, #The allometric growth exponent used in ZooMSS
                                      z0pre = 1, #external mortality (senescence)
                                      z0exp = 0.3,
@@ -259,14 +313,22 @@ fZooMizer_run <- function(groups, input){
                                      #pred_kernel = ... #probably easiest to just import this/pre-calculate it, once dimensions are worked out
   )
   
+  temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(mf.params@species_params$species), ncol = length(mf.params@w))
+  
   mf.params@other_params$assim_eff <- setassim_eff(groups)
+  
+  mf.params@other_params$temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(mf.params@species_params$species), ncol = length(mf.params@w))
   
   mf.params <- setZooMizerConstants(params = mf.params, Groups = groups, sst = input$sst)
   
   mf.params <- setParams(mf.params)
   
-  
+  mf.params <- setRateFunction(mf.params, "PredRate", "new_PredRate")
+  mf.params <- setRateFunction(mf.params, "EReproAndGrowth", "new_EReproAndGrowth")
+  mf.params <- setRateFunction(mf.params, "FeedingLevel", "newFeedingLevel")
   mf.params <- setRateFunction(mf.params, "Encounter", "new_Encounter")
+  
+  mf.params <- setReproduction(mf.params, repro_prop = matrix(0, nrow = nrow(mf.params@psi), ncol = ncol(mf.params@psi)))
   
   sim <- project(mf.params, dt = dt, t_max = tmaxx)
   
