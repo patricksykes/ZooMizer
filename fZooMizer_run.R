@@ -262,7 +262,7 @@ new_Encounter <- function(params, n, n_pp, n_other, t, ...) {
       params@pred_kernel, 3, params@dw_full * params@w_full * n_pp,
       "*", check.margin = FALSE), dims = 2)
   encounter <- params@other_params$temp_eff * params@search_vol * (phi_prey_species + phi_prey_background)
-
+browser()
   dimnames(encounter) <- dimnames(params@metab)
 
   # Add contributions from other components
