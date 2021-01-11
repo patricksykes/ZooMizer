@@ -62,7 +62,7 @@ fZooMSS_Run <- function(model){
   pb <- txtProgressBar(min = 0, max = itimemax, initial = 1, style = 3) # Initial progress bar
 
   # BIG TIME LOOP
-  for (itime in 1:itimemax){
+  for (itime in 1:1){
 
     setTxtProgressBar(pb, itime) # Update progress bar
 
@@ -153,7 +153,7 @@ fZooMSS_Run <- function(model){
 
     # Save results:
     if((itime %% param$isave) == 0){
-      isav <- itime/param$isave
+      isav <- itime/param$isave+1
 
       ## Phytoplankton diet
       pico_phyto_diet <- rowSums(model$diet_pico_phyto*N) # Pico-phytoplankton

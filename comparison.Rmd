@@ -21,7 +21,7 @@ library(Rcpp)
 source("fZooMSS_Model.R") #source the model code
 source("fZooMSS_Setup.R")
 source("fZooMSS_CalculatePhytoParam.R")
-Rcpp::sourceCpp("fZooMSS_MvF_Rcpp.cpp") #explicitly using same numerics as mizer
+#Rcpp::sourceCpp("fZooMSS_MvF_Rcpp.cpp") #explicitly using same numerics as mizer
 #setwd("~/GitHub/ZooMizer/")
 ## Build environmental data
 #enviro <- readRDS("data/enviro_test20.RDS")
@@ -35,12 +35,14 @@ Groups$Carbon <- 0.1
 
 
 input_params <- enviro_data[1,]
-input_params$dt <- 1
+input_params$dt <- 0.1
 input_params$tmax <- 1
 SaveTimeSteps <- TRUE
 
 zoomsstest <- list()
 zoomsstest$model$model_runtime <- system.time(
+ browser()
+ 
  zoomsstest <- fZooMSS_Model(input_params, Groups, SaveTimeSteps)
 )
 saveRDS(zoomsstest,"zoomssoutputdt1.rds")
