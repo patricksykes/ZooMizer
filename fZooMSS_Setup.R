@@ -281,11 +281,10 @@ fZooMSS_Setup <- function(param){
   model$dw_phyto <- (10^param$dx - 1) * param$w_phyto
   model$phi_prey_background <- assim_phyto * phyto_theta[,1] *
     rowSums(sweep(
-      model$phyto_growthkernel2, 3, #model$dw_phyto *  # should remove this to match zoomizer
+      model$phyto_growthkernel2, 3, #model$dw_phyto *  # should remove this to match zoomizer - N absolute, not normalised
       model$param$w_phyto * model$nPP,
       "*", check.margin = FALSE), dims = 2)
-  model$phyto_encounter <- model$temp_eff * SearchVol * model$phi_prey_background
-
+  model$phyto_encounter <- model$temp_eff * model$phi_prey_background #* SearchVol #SearchVol already included in phyto_growthkernel2
 
   return(model)
 } # End of Setup function

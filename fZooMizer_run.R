@@ -193,6 +193,7 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
     # a_{ij} = - g_i(w_{j-1}) / dw_j dt
     a[, idx] <- sweep(-r$e_growth[, idx - 1, drop = FALSE] * dt, 2,
                       params@dw[idx], "/")
+    browser()
     # b_{ij} = 1 + g_i(w_j) / dw_j dt + \mu_i(w_j) dt
     b[] <- 1 + sweep(r$e_growth * dt, 2, params@dw, "/") + r$mort * dt
     # S_{ij} <- N_i(w_j)
