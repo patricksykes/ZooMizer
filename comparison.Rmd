@@ -360,8 +360,11 @@ Here's the setup in ZooMSS:
 
 ```{r}
 
-ngrps <- model$param$ngrps
-ngrid <- model$param$ngrid
+param <- zoomsstest$model$param
+model <- zoomsstest$model
+
+ngrps <- zoomsstest$model$param$ngrps
+ngrid <- zoomsstest$model$param$ngrid
 
 idx_iter <- 2:ngrid
 idx <- 2:(ngrid-1)
