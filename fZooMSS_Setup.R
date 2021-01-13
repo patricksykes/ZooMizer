@@ -119,12 +119,12 @@ fZooMSS_Setup <- function(param){
   simp_phyto <- array(1, dim = param$ngridPP)
   simp_phyto[c(seq(2, param$ngridPP-1,2))] <- 4
   simp_phyto[c(seq(3, param$ngridPP-1,2))] <- 2
-  sm_phyto <- matrix(simp_phyto, nrow = param$ngrid, ncol = param$ngridPP, byrow = TRUE) * (param$dx/3)
+  sm_phyto <- matrix(1, nrow = param$ngrid, ncol = param$ngridPP, byrow = TRUE) * (param$dx)
 
   simp_dynam <- array(1, dim = param$ngrid)
   simp_dynam[c(seq(2, param$ngrid-1,2))] <- 4
   simp_dynam[c(seq(3, param$ngrid-1,2))] <- 2
-  sm_dynam <- matrix(simp_dynam, nrow = param$ngrid, ncol = param$ngrid, byrow = TRUE) * (param$dx/3)
+  sm_dynam <- matrix(1, nrow = param$ngrid, ncol = param$ngrid, byrow = TRUE) * (param$dx)
 
   ## Temperature Effect Matrix
   # Effect of temperature on feeding and predation rate
@@ -214,33 +214,33 @@ fZooMSS_Setup <- function(param){
     ### GROWTH INTEGRAL CONSTANTS
     # Predators are rows, prey are columns
     model$phyto_growthkernel[i,,] <- matrix(SearchVol[i,], nrow = param$ngrid, ncol = param$ngridPP) *
-      sp_phyto_predkernel * gg_log_t_phyto# * sm_phyto
+      sp_phyto_predkernel * gg_log_t_phyto* sm_phyto
 
     #mizer method
     model$phyto_growthkernel2[i,,] <- matrix(SearchVol[i,], nrow = param$ngrid, ncol = param$ngridPP) *
       sp_phyto_predkernel
 
     model$dynam_growthkernel[i,,] <- matrix(SearchVol[i,], nrow = param$ngrid, ncol = param$ngrid)*
-      sp_dynam_predkernel*gg_log_t_dynam# *sm_dynam
+      sp_dynam_predkernel*gg_log_t_dynam*sm_dynam
 
     ### DIET INTEGRAL CONSTANTS
     # Predators are rows, prey are columns
     model$phyto_dietkernel[i,,] <- matrix(SearchVol[i,], nrow = param$ngrid, ncol = param$ngridPP)*
-      sp_phyto_predkernel*diet_log_t_phyto#*sm_phyto
+      sp_phyto_predkernel*diet_log_t_phyto*sm_phyto
     model$dynam_dietkernel[i,,] <- matrix(SearchVol[i,], nrow = param$ngrid, ncol = param$ngrid)*
-      sp_dynam_predkernel*diet_log_t_dynam#*sm_dynam
+      sp_dynam_predkernel*diet_log_t_dynam*sm_dynam
 
     ### DIFFUSION INTEGRAL CONSTANTS
     # Predators are rows, prey are columns
     model$phyto_diffkernel[i,,] <- matrix(SearchVol[i,], nrow = param$ngrid, ncol = param$ngridPP)*
-      sp_phyto_predkernel*diff_log_t_phyto#*sm_phyto
+      sp_phyto_predkernel*diff_log_t_phyto*sm_phyto
     model$dynam_diffkernel[i,,] <- matrix(SearchVol[i,], nrow = param$ngrid, ncol = param$ngrid)*
-      sp_dynam_predkernel*diff_log_t_dynam#*sm_dynam
+      sp_dynam_predkernel*diff_log_t_dynam*sm_dynam
 
     ### MORTALITY INTEGRAL CONSTANTS
     # Prey are rows, predators are columns
     model$dynam_mortkernel[i,,] <- matrix(SearchVol[i,], nrow = param$ngrid, ncol = param$ngrid, byrow = TRUE)*
-      t(sp_dynam_predkernel)#*sm_dynam
+      t(sp_dynam_predkernel)*sm_dynam
   }
 
   # no_sen = which(param$Groups$species == c("Flagellates", "Ciliates")) # no senescence mortality for flagellates and ciliates
