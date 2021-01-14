@@ -279,6 +279,7 @@ fZooMSS_Setup <- function(param){
 
   ## Mizer method
   model$dw_phyto <- (10^param$dx - 1) * param$w_phyto
+  model$dw <- (10^param$dx - 1) * param$w
   model$phi_prey_background <- assim_phyto * phyto_theta[,1] *
     rowSums(sweep(
       model$phyto_growthkernel2, 3, #model$dw_phyto *  # should remove this to match zoomizer - N absolute, not normalised
