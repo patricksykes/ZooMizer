@@ -471,8 +471,8 @@ no_sp <- nrow(params@species_params) # number of species
 
     
 all.equal(e_growth, gg, check.attributes = FALSE)
-all.equal(A.iter, a, check.attributes = FALSE)
-all.equal(C.iter, b, check.attributes = FALSE)
+all.equal(A_iter, a, check.attributes = FALSE)
+all.equal(C_iter, b, check.attributes = FALSE)
 
 ```
 

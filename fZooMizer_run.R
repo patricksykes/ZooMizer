@@ -50,19 +50,19 @@ setZooMizerConstants <- function(params, Groups, sst){
     ## Senescence mortality
     if (params@species_params$Type[i] == "Zooplankton") {
       M_sb[i,] <- ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
-      M_sb[i, params@species_params$w_inf[i] < params@w * (1 - 1e-06)] <- 0
-      M_sb[i, params@species_params$w_mat[i] > params@w * (1 + 1e-06)] <- 0
+      M_sb[i, params@species_params$w_inf[i] < params@w * (1 + 1e-06)] <- 0
+      M_sb[i, params@species_params$w_mat[i] > params@w * (1 - 1e-06)] <- 0
     }
 
     if (params@species_params$Type[i] == "Fish") {
       M_sb[i,] <- 0.1*ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
-      M_sb[i, params@species_params$w_inf[i] < params@w * (1 - 1e-06)] <- 0
-      M_sb[i, params@species_params$w_mat[i] > params@w * (1 + 1e-06)] <- 0
+      M_sb[i, params@species_params$w_inf[i] < params@w * (1 + 1e-06)] <- 0
+      M_sb[i, params@species_params$w_mat[i] > params@w * (1 - 1e-06)] <- 0
     }
 
     ### Search volume
     SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$q[i]))
-    SearchVol[i, params@species_params$w_inf[i] < params@w * (1 - 1e-06)] <- 0
+    SearchVol[i, params@species_params$w_inf[i] < params@w * (1 + 1e-06)] <- 0
     SearchVol[i, params@species_params$w_min[i] > params@w * (1 + 1e-06)] <- 0
 
     ### Predation Kernels
@@ -331,6 +331,7 @@ fZooMizer_run <- function(groups, input){
                                          #pred_kernel = ... #probably easiest to just import this/pre-calculate it, once dimensions are worked out
   )
 
+  mf.params@species_params$w_min <- groups$w_min  #fix Mizer setting the egg weight to be one size larger for some groups.
   #mf.params@initial_n[] <- readRDS("data/initialn.RDS")
 
   temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(mf.params@species_params$species), ncol = length(mf.params@w))
