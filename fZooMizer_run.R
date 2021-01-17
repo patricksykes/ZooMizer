@@ -97,6 +97,7 @@ setZooMizerConstants <- function(params, Groups, sst){
     }
 
   }
+  SearchVol[12,178] <- (params@species_params$gamma[12])*(params@w[178]^(params@species_params$q[12])) #adding last size class by hand
 
   #temperature effect
   M_sb <- params@other_params$temp_eff * M_sb # Incorporate temp effect on senscence mortality
@@ -280,7 +281,7 @@ new_PredRate <- function(params, n, n_pp, n_other, t, feeding_level, ...)
 {
   n_total_in_size_bins <- sweep(n, 2, params@dw, "*",
                                 check.margin = FALSE)
-  pred_rate <- sweep(params@pred_kernel, c(1, 2), (1 - feeding_level) * params@search_vol * n_total_in_size_bins,
+  pred_rate <- sweep(params@pred_kernel, c(1, 2), (1 - feeding_level) * params@other_params$temp_eff * params@search_vol * n_total_in_size_bins,
                      "*", check.margin = FALSE)
   pred_rate <- colSums(aperm(pred_rate, c(2, 1, 3)), dims = 1)
   return(pred_rate)
@@ -351,7 +352,7 @@ fZooMizer_run <- function(groups, input){
   mf.params <- setRateFunction(mf.params, "EReproAndGrowth", "new_EReproAndGrowth")
   mf.params <- setRateFunction(mf.params, "FeedingLevel", "newFeedingLevel")
   mf.params <- setRateFunction(mf.params, "Encounter", "new_Encounter")
-
+  mf.params <- setRateFunction(mf.params, "PredRate", "new_PredRate")
   mf.params <- setReproduction(mf.params, repro_prop = matrix(0, nrow = nrow(mf.params@psi), ncol = ncol(mf.params@psi)))
 
 
