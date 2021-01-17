@@ -35,7 +35,7 @@ Groups <- read.csv("TestGroups.csv") #[c(1,3,12),]
 
 
 input_params <- enviro_data[1,]
-input_params$dt <- 0.01
+input_params$dt <- 001
 input_params$tmax <- 1
 SaveTimeSteps <- TRUE
 
@@ -170,9 +170,8 @@ SearchVol <- matrix(NA, nrow = zoomsstest$model$param$ngrps, ncol = zoomsstest$m
 for(i in 1:zoomsstest$model$param$ngrps){
         ### Search volume
     SearchVol[i,] <- (zoomsstest$model$param$Groups$SearchCoef[i])*(zoomsstest$model$param$w^(zoomsstest$model$param$Groups$SearchExp[i]))
-    SearchVol[i, 10^(zoomsstest$model$param$Groups$Wmax[i]) < zoomsstest$model$param$w * (1 + 1e-06)] <- 0
-    SearchVol[i, 10^(zoomsstest$model$param$Groups$W0[i]) > zoomsstest$model$param$w * (1 - 1e-06)] <- 0
-    
+    SearchVol[i, 10^(zoomsstest$model$param$Groups$Wmax[i]) < zoomsstest$model$param$w] <- 0
+    SearchVol[i, 10^(zoomsstest$model$param$Groups$W0[i]) > zoomsstest$model$param$w] <- 0
     
 }
 

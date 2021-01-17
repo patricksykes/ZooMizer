@@ -98,7 +98,7 @@ fZooMSS_Run <- function(model){
     dim(dynam_diffkernel) <- c(ngrps*ngrid, ngrid)
     cs <- .colSums(diffusion_multiplier * t(dynam_diffkernel), m = ngrid, n = ngrps*ngrid)
     dim(cs) <- c(ngrps, ngrid)
-    diff <- diff_phyto + cs
+    diff <- (diff_phyto + cs)*0
 
     # sw3 <- sweep(dynam_diffkernel, 3, diffusion_multiplier, '*')
     # ap3 <- aperm(sw3, c(3,1,2))
