@@ -381,8 +381,8 @@ idx <- 2:(ngrid-1)
   # Temporary Matrices that get updated each time step some of these saved for output
   N <- matrix(model$N[1,,], nrow = ngrps, ncol = ngrid) # Abundances of functional groups, dim 1 = groups, dim 2 = size classes
 
-    growth_multiplier <- colSums(N * model$assim_eff) # 1 x n_sizes
-    predation_multiplier <- N * model$temp_eff # n_species x n_sizes
+    growth_multiplier <- colSums(N * model$assim_eff) / model$param$dw # 1 x n_sizes
+    predation_multiplier <- N * model$temp_eff / model$param$dx # n_species x n_sizes
     diffusion_multiplier <- colSums(N * (model$assim_eff^2)) # 1 x n_sizes
 
     ### DO GROWTH

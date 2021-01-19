@@ -266,7 +266,7 @@ fZooMSS_Setup <- function(param){
   model$dynam_mortkernel <- aperm(model$dynam_mortkernel, c(2,1,3))
 
   #### Because phyto spectrum is constant, we can solve the phyto component of growth, and diffusion before time loop
-  model$ingested_phyto <- model$temp_eff*(rowSums(sweep(model$phyto_growthkernel, 3, model$nPP, "*"), dims = 2)) # Ingested phyto
+  model$ingested_phyto <- model$temp_eff*(rowSums(sweep(model$phyto_growthkernel, 3, model$nPP/model$param$dw_phyto, "*"), dims = 2)) # Ingested phyto
   model$diff_phyto <- model$temp_eff^2*(rowSums(sweep(model$phyto_diffkernel, 3, model$nPP, "*"), dims = 2)) # Diffusion from phyto
   model$diet_phyto <- model$temp_eff*(rowSums(sweep(model$phyto_dietkernel, 3, model$nPP, "*"), dims = 2)) # Diet of total phyto
   model$diet_phyto_all_sizes <- sweep(sweep(model$phyto_dietkernel, 3, model$nPP, "*"),  c(1,2), model$temp_eff, "*") # Diet of total phyto, with all size classes of phyto maintained
