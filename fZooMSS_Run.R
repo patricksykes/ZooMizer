@@ -9,7 +9,6 @@ fZooMSS_Run <- function(model){
   param <- model$param
   dt <- model$param$dt
   dx <- model$param$dx
-  dw <- model$param$dw
   ngrps <- model$param$ngrps
   ngrid <- model$param$ngrid
   w <- model$param$w
@@ -67,8 +66,8 @@ fZooMSS_Run <- function(model){
 
     setTxtProgressBar(pb, itime) # Update progress bar
 
-    growth_multiplier <- colSums(N * assim_eff) / model$param$dw # 1 x n_sizes
-    predation_multiplier <- N * temp_eff / model$param$dx # n_species x n_sizes
+    growth_multiplier <- colSums(N * assim_eff) # 1 x n_sizes
+    predation_multiplier <- N * temp_eff # n_species x n_sizes
     diffusion_multiplier <- colSums(N * (assim_eff^2)) # 1 x n_sizes
 
     ### DO GROWTH

@@ -38,8 +38,6 @@ fZooMSS_Params <- function(Groups, input_params){
 
   param2$ngrid <- length(param2$w) # total number of size classes for zoo and fish
   param2$ngridPP <- length(param2$w_phyto) # total number of size classes for phyto
-  param2$dw = (10^param$dx - 1) * param2$w
-  param2$dw_phyto = (10^param$dx - 1) * param2$w_phyto
 
   param <- c(input_params, param, param2) # Join with input_params
   return(param)
