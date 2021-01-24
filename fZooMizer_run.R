@@ -100,7 +100,7 @@ setZooMizerConstants <- function(params, Groups, sst){
   SearchVol[12,178] <- (params@species_params$gamma[12])*(params@w[178]^(params@species_params$q[12])) #adding last size class by hand
 
   #temperature effect
-  M_sb <- params@other_params$temp_eff * M_sb # Incorporate temp effect on senscence mortality
+  M_sb <- params@other_params$temp_eff * M_sb * 10 # Incorporate temp effect on senscence mortality
 
 
   params@initial_n_pp <- params@resource_params$kappa * params@w_full^(1 - params@resource_params$lambda)/params@dw_full
@@ -360,7 +360,7 @@ fZooMizer_run <- function(groups, input){
   M_sb <- getExtMort(mf.params)
   M_sb[] <- readRDS("data/mu_b.RDS")
   temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(mf.params@species_params$species), ncol = length(mf.params@w))
-  M_sb <- temp_eff * M_sb # Incorporate temp effect on senscence mortality
+  M_sb <- temp_eff * M_sb *10 # Incorporate temp effect on senscence mortality
 
   mf.params <- setExtMort(mf.params, z0 = M_sb)
 

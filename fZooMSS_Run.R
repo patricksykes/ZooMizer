@@ -76,6 +76,16 @@ fZooMSS_Run <- function(model){
     dim(cs) <- c(ngrps, ngrid)
     gg <- ingested_phyto + cs
 
+    #Mizer code
+    assim_eff2 <- setassim_eff(model$param$Groups) #use the ZooMizer version of assim_eff
+    n_eff_prey <- sweep(assim_eff2 %*% N, 2,
+                        model$param$w, "*", check.margin = FALSE)
+    phi_prey_species <- rowSums(sweep(model$dynam_growthkernel2,
+      c(1, 3), n_eff_prey, "*", check.margin = FALSE), dims = 2)
+    encounter_dynam <- temp_eff * phi_prey_species
+
+    #all.equal(getEncounter(zoomizertest@params, n_pp = zoomizertest@params@initial_n_pp*0), encounter_dynam, check.attributes = FALSE)
+
     # sw <- sweep(dynam_growthkernel, 3, growth_multiplier, '*') # n_species x n_sizes x n_sizes
     # ap <- aperm(sw, c(3,1,2)) # n_sizes x n_species x n_sizes
     # cs <- colSums(ap) # n_species x n_sizes

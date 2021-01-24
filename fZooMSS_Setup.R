@@ -52,6 +52,7 @@ fZooMSS_Setup <- function(param){
     phyto_diffkernel = array(NA, dim = c(param$ngrps, param$ngrid, param$ngridPP)), # diffusion from phytoplankton consumption
     phyto_dietkernel = array(NA, dim = c(param$ngrps, param$ngrid, param$ngridPP)), # diet from phytoplankton
     dynam_growthkernel = array(NA, dim = c(param$ngrps, param$ngrid, param$ngrid)), # predation on zoo and fish
+    dynam_growthkernel2 = array(NA, dim = c(param$ngrps, param$ngrid, param$ngrid)), # predation on zoo and fish
     dynam_diffkernel = array(NA, dim = c(param$ngrps, param$ngrid, param$ngrid)), # diffusion from zoo and fish consumption
     dynam_dietkernel = array(NA, dim = c(param$ngrps, param$ngrid, param$ngrid)), # diet from zoo and fish
     dynam_mortkernel = array(NA, dim = c(param$ngrps, param$ngrid, param$ngrid)), # mortality from predation on dynamic component
@@ -222,6 +223,8 @@ fZooMSS_Setup <- function(param){
 
     model$dynam_growthkernel[i,,] <- matrix(SearchVol[i,], nrow = param$ngrid, ncol = param$ngrid)*
       sp_dynam_predkernel*gg_log_t_dynam*sm_dynam
+    model$dynam_growthkernel2[i,,] <- matrix(SearchVol[i,], nrow = param$ngrid, ncol = param$ngrid)*
+      sp_dynam_predkernel
 
     ### DIET INTEGRAL CONSTANTS
     # Predators are rows, prey are columns
