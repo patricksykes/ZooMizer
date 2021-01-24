@@ -100,7 +100,7 @@ setZooMizerConstants <- function(params, Groups, sst){
   SearchVol[12,178] <- (params@species_params$gamma[12])*(params@w[178]^(params@species_params$q[12])) #adding last size class by hand
 
   #temperature effect
-  M_sb <- params@other_params$temp_eff * M_sb * 10 # Incorporate temp effect on senscence mortality
+  # M_sb <- params@other_params$temp_eff * M_sb # Incorporate temp effect on senscence mortality
 
 
   params@initial_n_pp <- params@resource_params$kappa * params@w_full^(1 - params@resource_params$lambda)/params@dw_full
