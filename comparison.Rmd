@@ -36,7 +36,7 @@ Groups <- read.csv("TestGroups.csv") #[c(1,3,12),]
 dt <- 001
 input_params <- enviro_data[1,]
 input_params$dt <- dt
-input_params$tmax <- 1
+input_params$tmax <- 2
 SaveTimeSteps <- TRUE
 
 zoomsstest <- list()
@@ -57,6 +57,8 @@ assignInNamespace("newMultispeciesParams", new_newMultispeciesParams, ns = "mize
 
 environment(new_emptyParams) <- asNamespace('mizer')
 assignInNamespace("emptyParams", new_emptyParams, ns = "mizer")
+
+#setValidity("MizerParams", new_validMizerParams)
 
 groups <- read.csv("data/TestGroups_mizer.csv") #[c(1,3),]
 #groups$Carbon <- 0.1
@@ -463,26 +465,26 @@ no_sp <- nrow(params@species_params) # number of species
     n_pp <- params@initial_n_pp
     # Iterate species one time step forward:
     # a_{ij} = - g_i(w_{j-1}) / dw_j dt
-    a[, idx] <- sweep(e_growth[, idx - 1, drop = FALSE] * dt, 2,
-                      params@dw[idx], "/")
+    a[, idx] <- sweep(e_growth[, idx - 1, drop = FALSE] * dt , 2,
+                      params@dw[idx]*params@w[idx], "/") *0.1 /log(10)
     # b_{ij} = 1 + g_i(w_j) / dw_j dt + \mu_i(w_j) dt
-    b[] <- 1 + sweep(e_growth * dt, 2, params@dw, "/") + mort * dt
+    b[] <- 1 + sweep(e_growth * dt , 2, params@dw*params@w, "/")* 0.1 * 10^0.1 / log(10) + mort * dt * 0.1
     # S_{ij} <- N_i(w_j)
     S[,idx] <- n[, idx, drop = FALSE]
 
     
 all.equal(e_growth, gg, check.attributes = FALSE)
-all.equal(A_iter, a, check.attributes = FALSE)
+all.equal(sweep(a, 2, params@dw, "*"), A_iter, check.attributes = FALSE)
 all.equal(C_iter, b, check.attributes = FALSE)
 
 #just looking at the contribution from phyto ingestion:
 params2 <- params
 params2@initial_n <- params2@initial_n*0
-e_growth_phyto <- new_EReproAndGrowth(params = params2, n = params2@initial_n, n_pp = params2@initial_n_pp, n_other = params2@initial_n_other, t = 0, encounter = getEncounter(params2), feeding_level = getFeedingLevel(params2))
+e_growth_phyto <- new_EReproAndGrowth(params = params, n = params@initial_n*0, n_pp = params@initial_n_pp, n_other = params@initial_n_other *0, t = 0, encounter = getEncounter(params), feeding_level = getFeedingLevel(params))
 a_phyto <- matrix(0, nrow = no_sp, ncol = no_w)
-a_phyto[, idx] <- sweep(e_growth_phyto[, idx - 1, drop = FALSE] * dt, 2,
+a_phyto[, idx] <- sweep(e_growth_phyto[, idx - 1, drop = FALSE] * dt / 0.1, 2,
                       params@dw[idx], "/")
-all.equal(a_phyto[, idx], param$dt/param$dx * model$ingested_phyto[, idx-1])
+all.equal(sweep(a_phyto, 2, params@dw, "*")[, idx], param$dt/param$dx * model$ingested_phyto[, idx-1])
 
 # just the ingestion of zoo/fish:
 a_dynam <- a-a_phyto
@@ -539,7 +541,7 @@ Do the mortality rates agree?
 #senescence alone:
 # View(zoomsstest$model$M_sb)
 # View(zoomizertest@params@mu_b)
-all.equal(getExtMort(params), zoomsstest$model$M_sb, check.attributes = FALSE) # TRUE
+all.equal(getExtMort(params), zoomsstest$model$M_sb, check.attributes = FALSE) # 10 times higher - covered in the numerical step
 
 #predation mortality
 all.equal(getPredMort(zoomizertest@params)[1,], M2, check.attributes = FALSE)

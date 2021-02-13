@@ -116,8 +116,9 @@ setZooMizerConstants <- function(params, Groups, sst){
   tempN[params@species_params$Type == "Fish",] <- (1/sum(params@species_params$Type == "Fish")) * tempN[params@species_params$Type=="Fish",] # Set abundandances of fish groups based on smallest size class proportions
 
   # For each group, set densities at w > Winf and w < Wmin to 0
+  params@species_params$w_min <- params@w[params@w_min_idx]
   tempN[unlist(tapply(round(log10(params@w), digits = 2), 1:length(params@w), function(wx,Winf) Winf < wx, Winf = log10(params@species_params$w_inf)))] <- 0
-  tempN[unlist(tapply(round(log10(params@w), digits = 2), 1:length(params@w), function(wx,Wmin) Wmin > wx, Wmin = log10(params@species_params$w_min)))] <- 0
+  tempN[unlist(tapply(params@w, 1:length(params@w), function(wx,Wmin) Wmin > wx, Wmin = params@species_params$w_min))] <- 0
   #dimnames(tempN) <- dimnames(params@initial_n)
   params@initial_n[] <- tempN
 
@@ -149,6 +150,14 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
   for (i in 1:length(w_max_idx)) {
     w_max_idx[i] <- which(round(log10(params@w),2) == round(log10(params@species_params$w_inf[i]),2))
   }
+  
+  fish_grps <- which(params@species_params$Type == "Fish")
+  
+  if(sum(params@species_params$Type == "Zooplankton") > 1){ # If there's only one zoo group, then you do not need w0idx. All this stuff gives you info about all zoo groups except the smallest zoo group.
+    w0idx <- which(params@w_min_idx > min(params@w_min_idx) & is.na(params@species_params$Prop) == FALSE)
+    w0mins <- params@w_min_idx[w0idx]
+    props_z <- params@species_params$Prop[w0idx] # Zooplankton proportions
+    }
 
   # Hacky shortcut to access the correct element of a 2D array using 1D notation
   # This references the egg size bracket for all species, so for example
@@ -193,9 +202,9 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
     # Iterate species one time step forward:
     # a_{ij} = - g_i(w_{j-1}) / dw_j dt
     a[, idx] <- sweep(-r$e_growth[, idx - 1, drop = FALSE] * dt, 2,
-                      params@dw[idx], "/")
+                      params@w[idx-1], "/") * 10^(-0.1) / log(10)
     # b_{ij} = 1 + g_i(w_j) / dw_j dt + \mu_i(w_j) dt
-    b[] <- 1 + sweep(r$e_growth * dt, 2, params@dw, "/") + r$mort * dt
+    b[] <- 1 + sweep(r$e_growth * dt , 2, params@w, "/") /log(10) + r$mort * dt *0.1
     # S_{ij} <- N_i(w_j)
     S[,idx] <- n[, idx, drop = FALSE]
     # Update n
@@ -212,17 +221,39 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
   # Update first and last size groups of n
   #TODO: Make this a little less hacky
   #n[1,1] <- params@species_params$Prop[1]*n_pp[length(params@w_full)-length(params@w)+1]
-  n[1,1] <- params@initial_n[1,1]
-  n[1,w_max_idx[1]] <- 0
-  for (i in 2:no_sp) {
-    n[i, w_max_idx[i]] <- 0
-    if(params@species_params$Type[i] != "Fish"){
-      n[i,params@w_min_idx[i]] <- params@species_params$Prop[i] * sum(n[-i,params@w_min_idx[i]])
-    }
-    if(params@species_params$Type[i] == "Fish"){
-      n[i,params@w_min_idx[i]] <- 1/length(which(params@species_params$Type=="Fish")) * sum(n[which(params@species_params$Type!="Fish"),params@w_min_idx[i]])
+  if(sum(params@species_params$Type == "Zooplankton") > 1){ # If you only have one zoo group, it will be locked to phyto spectrum so you do not need to do this
+    for(i in 1:length(w0idx)){
+      w_min_curr <- w0mins[i]
+      exclude_mins <- w0idx[which(w0mins == w_min_curr)]
+      n[w0idx[i], w_min_curr] <- props_z[i] * sum(n[-exclude_mins, w_min_curr])
     }
   }
+  
+  fish_mins <- unlist(lapply(params@species_params$w_min[fish_grps],
+                             function(x){which(round(log10(params@w), digits = 2) == x)}))
+  
+  if(sum(params@species_params$Type == "Fish") > 1 & sum(params@species_params$Type == "Zooplankton") > 1){
+    n[fish_grps,fish_mins] <- (1/length(fish_grps))*(colSums(n[-fish_grps,fish_mins]))
+  }else{
+    n[fish_grps, fish_mins] <- (1/length(fish_grps))*sum(n[-fish_grps, fish_mins])
+  }
+
+  for (i in 1:no_sp) {
+    n[i, w_max_idx[i]] <- 0
+  }
+  
+    
+  # n[1,1] <- params@initial_n[1,1]
+  # n[1,w_max_idx[1]] <- 0
+  # for (i in 2:no_sp) {
+  #   n[i, w_max_idx[i]] <- 0
+  #   if(params@species_params$Type[i] != "Fish"){
+  #     n[i,params@w_min_idx[i]] <- params@species_params$Prop[i] * sum(n[-i,params@w_min_idx[i]])
+  #   }
+  #   if(params@species_params$Type[i] == "Fish"){
+  #     n[i,params@w_min_idx[i]] <- 1/length(which(params@species_params$Type=="Fish")) * sum(n[which(params@species_params$Type!="Fish"),params@w_min_idx[i]])
+  #   }
+  # }
 
   return(list(n = n, n_pp = n_pp, n_other = n_other, rates = r))
 }
@@ -584,11 +615,17 @@ new_emptyParams <- function(species_params,
   # grid points in w_min_idx
   w_min_idx <- as.vector(suppressWarnings(
     tapply(species_params$w_min, 1:no_sp,
-           function(w_min, wx) max(which(wx <= w_min)), wx = w)))
+            function(w_min, wx) max(which(wx <= w_min)), wx = w)))
+  #         function(w_min, wx) max(which(round(log10(wx), digits = 2) <= round(log10(w_min), digits = 2))), wx = w)))
   # Due to rounding errors this might happen:
   w_min_idx[w_min_idx == -Inf] <- 1
   names(w_min_idx) <- species_names
   species_params$w_min <- w[w_min_idx]
+  
+  # if (any(species_params$w_min < w[w_min_idx]) || any(species_params$w_min > w[w_min_idx + 1])) {
+  #   msg <- "The `w_min_idx` should point to the start of the size bin containing the egg size `w_min`."
+  #   errors <- c(errors, msg)
+  # }
 
   # Colour and linetype scales ----
   # for use in plots
@@ -712,4 +749,3 @@ new_emptyParams <- function(species_params,
 
   return(params)
 }
-

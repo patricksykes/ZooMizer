@@ -62,7 +62,7 @@ fZooMSS_Run <- function(model){
   pb <- txtProgressBar(min = 0, max = itimemax, initial = 1, style = 3) # Initial progress bar
 
   # BIG TIME LOOP
-  for (itime in 1:1){
+  for (itime in 1:itimemax){
 
     setTxtProgressBar(pb, itime) # Update progress bar
 
@@ -77,12 +77,12 @@ fZooMSS_Run <- function(model){
     gg <- ingested_phyto + cs
 
     #Mizer code
-    assim_eff2 <- setassim_eff(model$param$Groups) #use the ZooMizer version of assim_eff
-    n_eff_prey <- sweep(assim_eff2 %*% N, 2,
-                        model$param$w, "*", check.margin = FALSE)
-    phi_prey_species <- rowSums(sweep(model$dynam_growthkernel2,
-      c(1, 3), n_eff_prey, "*", check.margin = FALSE), dims = 2)
-    encounter_dynam <- temp_eff * phi_prey_species
+    # assim_eff2 <- setassim_eff(model$param$Groups) #use the ZooMizer version of assim_eff
+    # n_eff_prey <- sweep(assim_eff2 %*% N, 2,
+    #                     model$param$w, "*", check.margin = FALSE)
+    # phi_prey_species <- rowSums(sweep(model$dynam_growthkernel2,
+    #   c(1, 3), n_eff_prey, "*", check.margin = FALSE), dims = 2)
+    # encounter_dynam <- temp_eff * phi_prey_species
 
     #all.equal(getEncounter(zoomizertest@params, n_pp = zoomizertest@params@initial_n_pp*0), encounter_dynam, check.attributes = FALSE)
 
