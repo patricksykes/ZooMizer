@@ -1,4 +1,5 @@
 require(mizer)
+require(assertthat)
 source("fZooMizer_run.R")
 #source("ZooMizer_setup.R")
 
