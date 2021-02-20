@@ -462,8 +462,8 @@ hack <- sim2 #making a "fake" MizerSim object that we can use plots on.
 
 #match ZooMSS data to that collected from zoomizer
 enviro <- readRDS("data/enviro_test20.RDS")
-zoomssgrid <- readRDS("zoomssgrid.rds")
-#zoomssgrid2 <- zoomssgrid[enviro$CellID]
+zoomssgrid <- readRDS("zoomssgrid_redo_yearly.rds")
+zoomssgrid <- zoomssgrid[rank(enviro$CellID)]
 
 w <- matrix(hack@params@w, nrow = nrow(hack@params@species_params), ncol = length(hack@params@w), byrow = TRUE)
 dw <- matrix(hack@params@dw, nrow = nrow(hack@params@species_params), ncol = length(hack@params@dw), byrow = TRUE)

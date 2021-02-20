@@ -1,5 +1,6 @@
 require(mizer)
 require(assertthat)
+require(tidyverse)
 source("fZooMizer_run.R")
 #source("ZooMizer_setup.R")
 
@@ -50,11 +51,14 @@ saveRDS(zoomizergrid, file="test_grid.RDS", version = 2)
 # 
 # plotSpectra(hack2, time_range = 1)
 # 
-# zgrid <- list()
-# j <- 0
-# for (i in enviro$cellID) {
-#   j <- j+1
-#   zgrid[[j]] <- zoomssgrid[[i]]
-# }
+
+# load("Output/full_ZooMizer.RData")
 # 
-# saveRDS(zgrid, "zoomssgrid.rds")
+#  zgrid <- list()
+#  j <- 0
+#  for (i in 1:20) {
+#    j <- j+1
+#    zgrid[[j]] <- res[[i]]
+#  }
+#  
+# saveRDS(zgrid, "zoomssgrid_redo_yearly.rds")
