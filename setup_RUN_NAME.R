@@ -7,30 +7,38 @@
 # library(Rcpp) # Only needed if we are running with Rcpp code.
 
 source("fZooMSS_Model.R") #source the model code
+source("fZooMSS_CalculatePhytoParam.R")
 
-enviro_data <- readRDS("envirofull_20200317.RDS") # Load environmental data
-enviro_data$tmax <- 25 # Set length of simulation (years)
+enviro_data <- readRDS("data/enviro_test20.RDS") # Load environmental data
+enviro_data <- fZooMSS_CalculatePhytoParam(enviro_data)
+enviro_data$tmax <- 1000 # Set length of simulation (years)
 
-jobname <- 'DATE_JOBNAME' #job name used on queue: Recommend: YYYYMMDD_AbbrevExperimentName.
+jobname <- '20210216_NoDiffusion' #job name used on queue: Recommend: YYYYMMDD_AbbrevExperimentName.
 enviro_row <- 1 # Which row of the environmental data do you want to run if HPC=FALSE
 
-HPC <- FALSE # Is this being run on a HPC or will we choose the row
+#HPC <- FALSE # Is this being run on a HPC or will we choose the row
 SaveTimeSteps <- TRUE # Should we save all time steps
 
 Groups <- read.csv("TestGroups.csv", stringsAsFactors = FALSE) # Load in functional group information
 
 ### No need to change anything below here.
-if (HPC == TRUE){
-  ID <- as.integer(Sys.getenv('PBS_ARRAY_INDEX')) # Get the array run number on HPC
-  } else {
-    ID <- enviro_row
-  }
-ID_char <- sprintf("%04d",ID) # Set the ID as a 4 digit character so it will sort properly
+# if (HPC == TRUE){
+#   ID <- as.integer(Sys.getenv('PBS_ARRAY_INDEX')) # Get the array run number on HPC
+#   } else {
+#     ID <- enviro_row
+#   }
 
-input_params <- enviro_data[ID,]
 
-out$model$model_runtime <- system.time(
-  out <- fZooMSS_Model(input_params, Groups, SaveTimeSteps)
-)
+for (i in 1:nrow(enviro_data)) {
+  ID <- enviro_data$CellID[i]
+  ID_char <- sprintf("%04d",ID) # Set the ID as a 4 digit character so it will sort properly
+  input_params <- enviro_data[i,]
+  
+  out$model$model_runtime <- system.time(
+    out <- fZooMSS_Model(input_params, Groups, SaveTimeSteps)
+  )
+  saveRDS(out, file = paste0("RawOutput/", jobname, "_", ID_char,".RDS"))
+}
 
-saveRDS(out, file = paste0("RawOutput/", jobname, "_", ID_char,".RDS"))
+
+
