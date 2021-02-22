@@ -121,7 +121,9 @@ setZooMizerConstants <- function(params, Groups, sst){
   tempN[unlist(tapply(params@w, 1:length(params@w), function(wx,Wmin) Wmin > wx, Wmin = params@species_params$w_min))] <- 0
   #dimnames(tempN) <- dimnames(params@initial_n)
   params@initial_n[] <- tempN
-
+  
+  SearchVol <- readRDS("data/SearchVol.rds")
+  
   params <- setExtMort(params, z0 = M_sb)
   params <- setSearchVolume(params, search_vol = SearchVol)
   params <- setPredKernel(params, pred_kernel)
@@ -229,10 +231,10 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
     }
   }
   
-  fish_mins <- unlist(lapply(params@species_params$w_min[fish_grps],
-                             function(x){which(round(log10(params@w), digits = 2) == x)}))
+  fish_mins <- unlist(params@w_min_idx[params@species_params$Type == "Fish"])
   
-  if(sum(params@species_params$Type == "Fish") > 1 & sum(params@species_params$Type == "Zooplankton") > 1){
+  
+  if(sum(params@species_params$Type == "Fish") > 1 && sum(params@species_params$Type == "Zooplankton") > 1){
     n[fish_grps,fish_mins] <- (1/length(fish_grps))*(colSums(n[-fish_grps,fish_mins]))
   }else{
     n[fish_grps, fish_mins] <- (1/length(fish_grps))*sum(n[-fish_grps, fish_mins])

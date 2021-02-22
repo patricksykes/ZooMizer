@@ -465,10 +465,10 @@ no_sp <- nrow(params@species_params) # number of species
     n_pp <- params@initial_n_pp
     # Iterate species one time step forward:
     # a_{ij} = - g_i(w_{j-1}) / dw_j dt
-    a[, idx] <- sweep(e_growth[, idx - 1, drop = FALSE] * dt , 2,
-                      params@dw[idx]*params@w[idx], "/") *0.1 /log(10)
+    a[, idx] <- sweep(e_growth[, idx - 1, drop = FALSE] * dt, 2,
+                      params@w[idx-1], "/") * 10^(-0.1) / log(10)
     # b_{ij} = 1 + g_i(w_j) / dw_j dt + \mu_i(w_j) dt
-    b[] <- 1 + sweep(e_growth * dt , 2, params@dw*params@w, "/")* 0.1 * 10^0.1 / log(10) + mort * dt * 0.1
+    b[] <- 1 + sweep(e_growth * dt , 2, params@w, "/") /log(10) + r$mort * dt * 0.1
     # S_{ij} <- N_i(w_j)
     S[,idx] <- n[, idx, drop = FALSE]
 
@@ -541,19 +541,19 @@ Do the mortality rates agree?
 #senescence alone:
 # View(zoomsstest$model$M_sb)
 # View(zoomizertest@params@mu_b)
-all.equal(getExtMort(params), zoomsstest$model$M_sb, check.attributes = FALSE) # 10 times higher - covered in the numerical step
+all.equal(getExtMort(params)/10, zoomsstest$model$M_sb, check.attributes = FALSE) # 10 times higher - covered in the numerical step
 
 #predation mortality
-all.equal(getPredMort(zoomizertest@params)[1,], M2, check.attributes = FALSE)
+all.equal(getPredMort(zoomizertest@params)[1,]/10, M2, check.attributes = FALSE)
 
 #overall mortality
-all.equal(getMort(params), Z, check.attributes = FALSE)
+all.equal(getMort(params)/10, Z, check.attributes = FALSE)
 
 ```
 
 Run ZooMSS on Zoomizer initial values:
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 curr_min_size <- vector()
   curr_max_size <- vector()
   for (i in 1:ngrps){
