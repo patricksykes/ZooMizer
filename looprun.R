@@ -7,6 +7,12 @@ source("fZooMizer_run.R")
 environment(new_project_simple) <- asNamespace('mizer')
 assignInNamespace("project_simple", new_project_simple, ns = "mizer")
 
+environment(new_newMultispeciesParams) <- asNamespace('mizer')
+assignInNamespace("newMultispeciesParams", new_newMultispeciesParams, ns = "mizer")
+
+environment(new_emptyParams) <- asNamespace('mizer')
+assignInNamespace("emptyParams", new_emptyParams, ns = "mizer")
+
 
 Groups <- read.csv("data/TestGroups_mizer.csv")
 

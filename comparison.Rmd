@@ -33,8 +33,8 @@ Groups <- read.csv("TestGroups.csv") #[c(1,3,12),]
 
 
 
-dt <- 001
-input_params <- enviro_data[1,]
+dt <- 00.1
+input_params <- enviro_data[967,]
 input_params$dt <- dt
 input_params$tmax <- 2
 SaveTimeSteps <- TRUE
@@ -468,14 +468,14 @@ no_sp <- nrow(params@species_params) # number of species
     a[, idx] <- sweep(e_growth[, idx - 1, drop = FALSE] * dt, 2,
                       params@w[idx-1], "/") * 10^(-0.1) / log(10)
     # b_{ij} = 1 + g_i(w_j) / dw_j dt + \mu_i(w_j) dt
-    b[] <- 1 + sweep(e_growth * dt , 2, params@w, "/") /log(10) + r$mort * dt * 0.1
+    b[] <- 1 + sweep(e_growth * dt , 2, params@w, "/") /log(10) + mort * dt * 0.1
     # S_{ij} <- N_i(w_j)
     S[,idx] <- n[, idx, drop = FALSE]
 
     
 all.equal(e_growth, gg, check.attributes = FALSE)
 all.equal(sweep(a, 2, params@dw, "*"), A_iter, check.attributes = FALSE)
-all.equal(C_iter, b, check.attributes = FALSE)
+all.equal(b, C_iter, check.attributes = FALSE)
 
 #just looking at the contribution from phyto ingestion:
 params2 <- params

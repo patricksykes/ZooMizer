@@ -510,8 +510,9 @@ testdf$zoomizertcb[i] = sum(zoomizergrid[[i]]@n[tmax,,]*w*dw)
 }
 
 (scatter <- ggplot(testdf, aes(x=log10(zoomsstcb), y=log10(zoomizertcb)))+
-  geom_point()+
-  geom_smooth(method = 'lm'))
+    geom_abline(slope = 1, intercept = 0) +
+    geom_point()+
+    geom_smooth(method = 'lm'))
 
 ggsave("zoomss_zoomizer_comparison_tcb.png",scatter)
 
