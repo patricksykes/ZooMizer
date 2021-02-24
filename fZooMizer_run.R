@@ -337,7 +337,7 @@ fZooMizer_run <- function(groups, input){
   chlo = input$chlo
   sst = input$sst
   dt = input$dt
-  tmaxx = input$tmaxx
+  tmax = input$tmax
 
   #data
   groups$w_min <- 10^groups$w_min #convert from log10 values
@@ -397,7 +397,7 @@ fZooMizer_run <- function(groups, input){
 
   mf.params <- setExtMort(mf.params, z0 = M_sb)
 
-  sim <- project(mf.params, dt = dt, t_max = tmaxx)
+  sim <- project(mf.params, dt = dt, t_max = tmax, t_save = dt)
 
   return(sim)
 }
