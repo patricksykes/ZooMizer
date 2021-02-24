@@ -26,7 +26,7 @@ fZooMSS_Params <- function(Groups, input_params){
     num_zoo = sum(Groups$Type == "Zooplankton"), # How many zooplankton
     num_fish = sum(Groups$Type == "Fish"), # How many fish
     cc_phyto = 0.1, # Carbon content of phytoplankton size classes
-    isave = 1 # how often to save results every 'isave' time steps
+    isave = 1/dt # how often to save results every 'isave' time steps
   )
 
   ## Add additional parameters which are based on the parameter set

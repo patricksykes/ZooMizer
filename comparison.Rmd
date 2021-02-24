@@ -33,10 +33,10 @@ Groups <- read.csv("TestGroups.csv") #[c(1,3,12),]
 
 
 
-dt <- 001
-input_params <- enviro_data[1,]
+dt <- 00.5
+input_params <- enviro_data[223,]
 input_params$dt <- dt
-input_params$tmax <- 2
+input_params$tmax <- 1
 SaveTimeSteps <- TRUE
 
 zoomsstest <- list()
@@ -95,7 +95,7 @@ all.equal(zoomsstest$model$N[1,,] , zoomizertest@params@initial_n*matrix(zoomize
 #initialnsaved <- readRDS("data/initialn.RDS")
 all.equal(zoomsstest$model$N[1,,] , sweep(zoomizertest@params@initial_n, 2, zoomizertest@params@dw, "*"), check.attributes=FALSE)
 # quick check here: abundances after a time step?
-all.equal(sweep(zoomizertest@n[2,,],2, zoomizertest@params@dw, "*"), zoomsstest$model$N[2,,] , check.attributes=FALSE)
+all.equal(sweep(zoomizertest@n[input_params$tmax + 1,,],2, zoomizertest@params@dw, "*"), zoomsstest$model$N[input_params$tmax + 1,,] , check.attributes=FALSE)
 
 
 ```
@@ -404,7 +404,7 @@ idx <- 2:(ngrid-1)
     dim(model$dynam_diffkernel) <- c(ngrps*ngrid, ngrid)
     cs <- .colSums(diffusion_multiplier * t(model$dynam_diffkernel), m = ngrid, n = ngrps*ngrid)
     dim(cs) <- c(ngrps, ngrid)
-    diff <- model$diff_phyto + cs
+    diff <- (model$diff_phyto + cs)*0
 
     # sw3 <- sweep(dynam_diffkernel, 3, diffusion_multiplier, '*')
     # ap3 <- aperm(sw3, c(3,1,2))
@@ -468,7 +468,7 @@ no_sp <- nrow(params@species_params) # number of species
     a[, idx] <- sweep(e_growth[, idx - 1, drop = FALSE] * dt, 2,
                       params@w[idx-1], "/") * 10^(-0.1) / log(10)
     # b_{ij} = 1 + g_i(w_j) / dw_j dt + \mu_i(w_j) dt
-    b[] <- 1 + sweep(e_growth * dt , 2, params@w, "/") /log(10) + r$mort * dt * 0.1
+    b[] <- 1 + sweep(e_growth * dt , 2, params@w, "/") /log(10) + mort * dt *0.1
     # S_{ij} <- N_i(w_j)
     S[,idx] <- n[, idx, drop = FALSE]
 

@@ -1,0 +1,132 @@
+---
+title: "Finding the problem with dt"
+author: "Patrick"
+date: "24/02/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The problem
+
+I've found that ZooMSS and ZooMizer agree completely when `dt=1`, but disagree when the time step changes.
+
+Some setup:
+
+```{r loadpackages}
+library(mizer)
+library(Rcpp)
+
+source("fZooMSS_Model.R") #source the model code
+source("fZooMSS_Setup.R")
+source("fZooMSS_CalculatePhytoParam.R")
+#Rcpp::sourceCpp("fZooMSS_MvF_Rcpp.cpp") #explicitly using same numerics as mizer
+#setwd("~/GitHub/ZooMizer/")
+## Build environmental data
+#enviro <- readRDS("data/enviro_test20.RDS")
+enviro <- readRDS("data/envirofull_20200317.RDS")
+enviro_data <- fZooMSS_CalculatePhytoParam(enviro) # Calculate Phytoplankton Parameters
+Groups <- read.csv("TestGroups.csv") #[c(1,3,12),]
+#Groups$Carbon <- 0.1
+#Groups$Prop[-3] <- 0
+
+
+source("fZooMizer_run.R")
+environment(new_project_simple) <- asNamespace('mizer')
+assignInNamespace("project_simple", new_project_simple, ns = "mizer")
+
+environment(new_newMultispeciesParams) <- asNamespace('mizer')
+assignInNamespace("newMultispeciesParams", new_newMultispeciesParams, ns = "mizer")
+
+environment(new_emptyParams) <- asNamespace('mizer')
+assignInNamespace("emptyParams", new_emptyParams, ns = "mizer")
+
+#setValidity("MizerParams", new_validMizerParams)
+
+groups <- read.csv("data/TestGroups_mizer.csv") #[c(1,3),]
+#groups$Carbon <- 0.1
+#groups$Prop[-3] <- 0
+
+ZooMSS_Plot_BiomassTimeSeries <- function(dat){
+  library(tidyverse)
+  tspecies <- rowSums(sweep(dat$model$N,3,dat$model$param$w,"*"), dims = 2)
+  colnames(tspecies) <- dat$model$param$Groups$Species
+  tspecies <- as_tibble(tspecies)
+  tspecies$Time <- c(0, seq(dat$model$param$dt * dat$model$param$isave,
+                       dat$model$param$tmax,
+                       dat$model$param$dt * dat$model$param$isave))
+  tspecies <- tspecies %>%
+    pivot_longer(-Time, names_to = "Species", values_to = "Biomass") %>%
+    filter(Biomass > 0) %>%
+    mutate(Species = factor(Species, levels = dat$model$param$Groups$Species))
+  
+  gg <- ggplot(data = tspecies, mapping = aes(x = Time, y = Biomass, colour = Species)) +
+    geom_line(size = 1) +
+    geom_point(size = 1.2) +
+    scale_color_manual(values = dat$model$param$Groups$PlotColour) +
+    theme_bw() +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_log10(expand = c(0, 0)) +
+    labs(subtitle = "Biomass") +
+    xlab("Time (Years)")
+  
+  return(gg)
+}
+```
+
+Now run for each of `dt` equal to 1, 0.1 and 0.01:
+
+```{r run}
+dt <- 1
+input_params <- enviro_data[223,]
+input_params$dt <- dt
+input_params$tmax <- 10
+SaveTimeSteps <- TRUE
+
+zoomsstest_dt1 <- list()
+zoomsstest_dt1$model$model_runtime <- system.time(
+  zoomsstest_dt1 <- fZooMSS_Model(input_params, Groups, SaveTimeSteps)
+)
+zoomizertest1 <- fZooMizer_run(groups = groups, input = input_params)
+
+dt <- 0.1
+input_params <- enviro_data[223,]
+input_params$dt <- dt
+input_params$tmax <- 10
+SaveTimeSteps <- TRUE
+
+zoomsstest_dt01 <- list()
+zoomsstest_dt01$model$model_runtime <- system.time(
+  zoomsstest_dt01 <- fZooMSS_Model(input_params, Groups, SaveTimeSteps)
+)
+zoomizertest01 <- fZooMizer_run(groups = groups, input = input_params)
+
+dt <- 0.01
+input_params <- enviro_data[223,]
+input_params$dt <- dt
+input_params$tmax <- 10
+SaveTimeSteps <- TRUE
+
+zoomsstest_dt001 <- list()
+zoomsstest_dt001$model$model_runtime <- system.time(
+  zoomsstest_dt001 <- fZooMSS_Model(input_params, Groups, SaveTimeSteps)
+)
+zoomizertest001 <- fZooMizer_run(groups = groups, input = input_params)
+
+
+```
+
+## Plots
+
+
+```{r plots}
+plotBiomass(zoomizertest1)
+ZooMSS_Plot_BiomassTimeSeries(zoomsstest_dt1)
+plotBiomass(zoomizertest01)
+ZooMSS_Plot_BiomassTimeSeries(zoomsstest_dt01)
+plotBiomass(zoomizertest001)
+ZooMSS_Plot_BiomassTimeSeries(zoomsstest_dt001)
+```
+
