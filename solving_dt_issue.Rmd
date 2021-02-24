@@ -64,7 +64,7 @@ ZooMSS_Plot_BiomassTimeSeries <- function(dat){
   
   gg <- ggplot(data = tspecies, mapping = aes(x = Time, y = Biomass, colour = Species)) +
     geom_line(size = 1) +
-    geom_point(size = 1.2) +
+    #geom_point(size = 1.2) +
     scale_color_manual(values = dat$model$param$Groups$PlotColour) +
     theme_bw() +
     scale_x_continuous(expand = c(0, 0)) +
@@ -74,6 +74,9 @@ ZooMSS_Plot_BiomassTimeSeries <- function(dat){
   
   return(gg)
 }
+
+
+
 ```
 
 Now run for each of `dt` equal to 1, 0.1 and 0.01:
@@ -82,7 +85,7 @@ Now run for each of `dt` equal to 1, 0.1 and 0.01:
 dt <- 1
 input_params <- enviro_data[223,]
 input_params$dt <- dt
-input_params$tmax <- 10
+input_params$tmax <- 25
 SaveTimeSteps <- TRUE
 
 zoomsstest_dt1 <- list()
@@ -94,7 +97,7 @@ zoomizertest1 <- fZooMizer_run(groups = groups, input = input_params)
 dt <- 0.1
 input_params <- enviro_data[223,]
 input_params$dt <- dt
-input_params$tmax <- 10
+input_params$tmax <- 25
 SaveTimeSteps <- TRUE
 
 zoomsstest_dt01 <- list()
@@ -106,7 +109,7 @@ zoomizertest01 <- fZooMizer_run(groups = groups, input = input_params)
 dt <- 0.01
 input_params <- enviro_data[223,]
 input_params$dt <- dt
-input_params$tmax <- 10
+input_params$tmax <- 25
 SaveTimeSteps <- TRUE
 
 zoomsstest_dt001 <- list()
@@ -120,13 +123,164 @@ zoomizertest001 <- fZooMizer_run(groups = groups, input = input_params)
 
 ## Plots
 
+Start with the patchwork plots
 
-```{r plots}
-plotBiomass(zoomizertest1)
-ZooMSS_Plot_BiomassTimeSeries(zoomsstest_dt1)
-plotBiomass(zoomizertest01)
-ZooMSS_Plot_BiomassTimeSeries(zoomsstest_dt01)
-plotBiomass(zoomizertest001)
-ZooMSS_Plot_BiomassTimeSeries(zoomsstest_dt001)
+
+```{r patchwork}
+
+library(patchwork)
+library(tidyverse)
+
+#fix colours
+zoomizertest1@params@linecolour <- zoomizertest1@params@species_params$PlotColour
+zoomizertest01@params@linecolour <- zoomizertest1@params@species_params$PlotColour
+zoomizertest001@params@linecolour <- zoomizertest1@params@species_params$PlotColour
+
+
+z1 <- ZooMSS_Plot_BiomassTimeSeries(zoomsstest_dt1) + labs(title = "ZooMSS biomass") +
+  xlim(c(-1,26)) +
+  ylim(c(1e-10,1e10))+scale_y_log10()
+m1 <- plotBiomass(zoomizertest1)+labs(title = "ZooMizer biomass")+theme_bw() +
+  xlim(c(-1,26)) +
+  ylim(c(1e-10,1e10))+scale_y_log10()
+
+z2 <- ZooMSS_Plot_BiomassTimeSeries(zoomsstest_dt01) +
+  xlim(c(-1,26)) +
+  ylim(c(1e-4,1))+scale_y_log10()
+m2 <- plotBiomass(zoomizertest01)+theme_bw() +
+  xlim(c(-1,26)) +
+  ylim(c(1e-4,1))+scale_y_log10()
+
+z3 <- ZooMSS_Plot_BiomassTimeSeries(zoomsstest_dt001) +
+  xlim(c(-1,26)) +
+  ylim(c(1e-4,1))+scale_y_log10()
+m3 <- plotBiomass(zoomizertest001)+theme_bw() +
+  xlim(c(-1,26)) +
+  ylim(c(1e-4,1))+scale_y_log10()
+
+
+p <- (m1 +z1) / (m2 + z2) / (m3 + z3)
+
+#x11(width = 40, height = 20)
+p
+#ggsave("dt_Patchwork_withZoomizer.pdf")
+
 ```
 
+
+Now the timeseries
+
+```{r timeseries}
+
+#source("ZooMSS_Plot_AbundTimeSeries.R")
+
+ZooMSS_BiomassTimeSeries <- function(dat){
+  tspecies <- rowSums(sweep(dat$model$N,3,dat$model$param$w,"*"), dims = 2)
+  colnames(tspecies) <- dat$model$param$Groups$Species
+  tspecies <- as_tibble(tspecies)
+  tspecies$Time <- c(0,seq(dat$model$param$dt * dat$model$param$isave,
+                       dat$model$param$tmax,
+                       dat$model$param$dt * dat$model$param$isave))
+  tspecies <- tspecies %>%
+    pivot_longer(-Time, names_to = "Species", values_to = "Biomass") %>%
+    filter(Biomass > 0) %>%
+    mutate(Species = factor(Species, levels = dat$model$param$Groups$Species))
+  return(tspecies)
+}
+
+dat1 <- ZooMSS_BiomassTimeSeries(zoomsstest_dt001) %>%
+  mutate(dt = 0.01)
+dat2 <- ZooMSS_BiomassTimeSeries(zoomsstest_dt01) %>%
+  mutate(dt = 0.1)
+dat3 <- ZooMSS_BiomassTimeSeries(zoomsstest_dt1) %>%
+  mutate(dt = 1)
+
+dat <- bind_rows(dat1, dat2, dat3) %>%
+  mutate(dt = as.factor(dt))
+
+
+gg <- ggplot(data = dat, mapping = aes(x = Time, y = log10(Biomass), colour = Species)) +
+  geom_line(size = 0.01) +
+  geom_point(size = 0.01) +
+  scale_color_manual(values = zoomsstest_dt1$model$param$Groups$PlotColour) +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour = guide_legend(nrow = 1)) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(subtitle = "Biomass") +
+  xlab("Time (Years)")
+
+dat1m <- as_tibble(getBiomass(zoomizertest001)) %>% 
+  cbind("Time" = as.numeric(dimnames(zoomizertest001@n)[[1]]), . ) %>% 
+  pivot_longer(-Time, names_to = "Species", values_to = "Biomass") %>%
+    filter(Biomass > 0) %>%
+    mutate(Species = factor(Species, levels = zoomsstest_dt1$model$param$Groups$Species), dt = 0.01)
+
+dat2m <- as_tibble(getBiomass(zoomizertest01)) %>% 
+  cbind("Time" = as.numeric(dimnames(zoomizertest01@n)[[1]]), .) %>% 
+  pivot_longer(-Time, names_to = "Species", values_to = "Biomass") %>%
+    filter(Biomass > 0) %>%
+    mutate(Species = factor(Species, levels = zoomsstest_dt1$model$param$Groups$Species), dt = 0.1)
+
+dat3m <- as_tibble(getBiomass(zoomizertest1)) %>% 
+  cbind("Time" = as.numeric(dimnames(zoomizertest1@n)[[1]]), . ) %>% 
+  pivot_longer(-Time, names_to = "Species", values_to = "Biomass") %>%
+    filter(Biomass > 0) %>%
+    mutate(Species = factor(Species, levels = zoomsstest_dt1$model$param$Groups$Species), dt = 1)
+
+datm <- bind_rows(as_tibble(dat1m),as_tibble(dat2m),as_tibble(dat3m))
+
+ggm <- ggplot(data = datm, mapping = aes(x = Time, y = log10(Biomass), colour = Species)) +
+  geom_line(size = 0.01) +
+  geom_point(size = 0.01) +
+  scale_color_manual(values = zoomsstest_dt1$model$param$Groups$PlotColour) +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour = guide_legend(nrow = 1)) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(subtitle = "Biomass") +
+  xlab("Time (Years)")
+
+
+#x11(width = 20, height = 20)
+gg / ggm
+#ggsave("dt_Timeseries_withZoomizer.pdf")
+```
+
+The facet plot
+
+```{r facetplot}
+
+gg <- ggplot(data = dat, mapping = aes(x = Time, y = log10(Biomass), colour = dt)) +
+  geom_line(size = 0.01) +
+  geom_point(size = 0.01) +
+  # scale_color_manual(values = zoo1$model$param$Groups$PlotColour) +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour = guide_legend(nrow = 1)) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(subtitle = "ZooMSS Biomass") +
+  xlab("Time (Years)") +
+  facet_wrap(facets = vars(Species), ncol = 4, scales = "free_y")
+
+ggm <- ggplot(data = datm, mapping = aes(x = Time, y = log10(Biomass), colour = dt)) +
+  geom_line(size = 0.01) +
+  geom_point(size = 0.01) +
+  # scale_color_manual(values = zoo1$model$param$Groups$PlotColour) +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour = guide_legend(nrow = 1)) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) +
+  labs(subtitle = "ZooMizer Biomass") +
+  xlab("Time (Years)") +
+  facet_wrap(facets = vars(Species), ncol = 4, scales = "free_y")
+
+x11(width = 20, height = 20)
+gg / ggm
+ggsave("Figures/dt_Facet.pdf")
+
+```
