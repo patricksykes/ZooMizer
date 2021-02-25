@@ -14,7 +14,7 @@ enviro_data <- fZooMSS_CalculatePhytoParam(enviro_data)
 enviro_data$tmax <- 1000 # Set length of simulation (years)
 
 jobname <- '20210216_NoDiffusion' #job name used on queue: Recommend: YYYYMMDD_AbbrevExperimentName.
-enviro_row <- 1 # Which row of the environmental data do you want to run if HPC=FALSE
+#enviro_row <- 1 # Which row of the environmental data do you want to run if HPC=FALSE
 
 #HPC <- FALSE # Is this being run on a HPC or will we choose the row
 SaveTimeSteps <- TRUE # Should we save all time steps

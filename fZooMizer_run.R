@@ -206,7 +206,7 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
     a[, idx] <- sweep(-r$e_growth[, idx - 1, drop = FALSE] * dt, 2,
                       params@w[idx-1], "/") * 10^(-0.1) / log(10)
     # b_{ij} = 1 + g_i(w_j) / dw_j dt + \mu_i(w_j) dt
-    b[] <- 1 + sweep(r$e_growth * dt , 2, params@w, "/") /log(10) + r$mort * dt *0.1
+    b[] <- 1 + sweep(r$e_growth * dt , 2, params@w, "/") /log(10) + r$mort * dt * 0.1
     # S_{ij} <- N_i(w_j)
     S[,idx] <- n[, idx, drop = FALSE]
     # Update n
