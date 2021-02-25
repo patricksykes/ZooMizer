@@ -94,8 +94,8 @@ all.equal(zoomsstest$model$N[1,,] , zoomizertest@params@initial_n*matrix(zoomize
 
 #initialnsaved <- readRDS("data/initialn.RDS")
 all.equal(zoomsstest$model$N[1,,] , sweep(zoomizertest@params@initial_n, 2, zoomizertest@params@dw, "*"), check.attributes=FALSE)
-# quick check here: abundances after a time step?
-all.equal(sweep(zoomizertest@n[input_params$tmax + 1,,],2, zoomizertest@params@dw, "*"), zoomsstest$model$N[input_params$tmax + 1,,] , check.attributes=FALSE)
+# quick check here: abundances at the end?
+all.equal(sweep(zoomizertest@n[nrow(zoomizertest@n),,],2, zoomizertest@params@dw, "*"), zoomsstest$model$N[nrow(zoomsstest$model$N),,] , check.attributes=FALSE)
 
 
 ```

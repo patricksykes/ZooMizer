@@ -218,7 +218,7 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
     n <- inner_project_loop(no_sp = no_sp, no_w = no_w, n = n,
                             A = a, B = b, S = S,
                             w_min_idx = params@w_min_idx)
-  }
+  
 
   # Update first and last size groups of n
   #TODO: Make this a little less hacky
@@ -256,7 +256,7 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
   #     n[i,params@w_min_idx[i]] <- 1/length(which(params@species_params$Type=="Fish")) * sum(n[which(params@species_params$Type!="Fish"),params@w_min_idx[i]])
   #   }
   # }
-
+}
   return(list(n = n, n_pp = n_pp, n_other = n_other, rates = r))
 }
 
@@ -397,7 +397,7 @@ fZooMizer_run <- function(groups, input){
 
   mf.params <- setExtMort(mf.params, z0 = M_sb)
 
-  sim <- project(mf.params, dt = dt, t_max = tmax, t_save = dt)
+  sim <- project(mf.params, dt = dt, t_max = tmax, t_save = 1)
 
   return(sim)
 }

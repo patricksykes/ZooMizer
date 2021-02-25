@@ -243,9 +243,9 @@ ggm <- ggplot(data = datm, mapping = aes(x = Time, y = log10(Biomass), colour = 
   labs(subtitle = "Biomass") +
   xlab("Time (Years)")
 
-
+(p2 <- gg / ggm)
 #x11(width = 20, height = 20)
-gg / ggm
+# p2
 #ggsave("dt_Timeseries_withZoomizer.pdf")
 ```
 
@@ -281,6 +281,6 @@ ggm <- ggplot(data = datm, mapping = aes(x = Time, y = log10(Biomass), colour = 
 
 x11(width = 20, height = 20)
 gg / ggm
-ggsave("Figures/dt_Facet.pdf")
+ggsave("dt_Facet.pdf")
 
 ```
