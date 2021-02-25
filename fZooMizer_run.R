@@ -397,7 +397,7 @@ fZooMizer_run <- function(groups, input){
 
   mf.params <- setExtMort(mf.params, z0 = M_sb)
 
-  sim <- project(mf.params, dt = dt, t_max = tmax, t_save = 1)
+  sim <- project(mf.params, dt = dt, t_max = tmax, t_save = 1) #TODO: make t_save an input to fZooMizer_run
 
   return(sim)
 }
