@@ -2,6 +2,7 @@ require(mizer)
 require(assertthat)
 require(tidyverse)
 source("fZooMizer_run.R")
+source("fZooMSS_CalculatePhytoParam.R")
 #source("ZooMizer_setup.R")
 
 environment(new_project_simple) <- asNamespace('mizer')
@@ -17,6 +18,7 @@ assignInNamespace("emptyParams", new_emptyParams, ns = "mizer")
 Groups <- read.csv("data/TestGroups_mizer.csv")
 
 enviro <- readRDS("data/enviro_test20.RDS")
+enviro <- fZooMSS_CalculatePhytoParam(enviro)
 enviro$dt <- 0.01
 enviro$tmaxx <- 1000
 
