@@ -393,7 +393,7 @@ fZooMizer_run <- function(groups, input){
   M_sb <- getExtMort(mf.params)
   M_sb[] <- readRDS("data/mu_b.RDS")
   temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(mf.params@species_params$species), ncol = length(mf.params@w))
-  M_sb <- temp_eff * M_sb *10 # Incorporate temp effect on senscence mortality
+  M_sb <- temp_eff * M_sb *10 # Incorporate temp effect on senscence mortality, *10 for conversion
 
   mf.params <- setExtMort(mf.params, z0 = M_sb)
 
