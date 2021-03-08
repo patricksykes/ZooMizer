@@ -1,10 +1,11 @@
 ---
 title: "Setting up a zooplankton model using mizer"
-author: Patrick Sykes and Julia L. Blanchard
-date: July 22, 2020
-place: Brisbane
+author: "Patrick Sykes and Julia L. Blanchard"
+date: "July 22, 2020"
 output:
+  pdf_document: default
   html_document: default
+place: Brisbane
 ---
 
 
@@ -27,6 +28,8 @@ require(tidyverse)
 
 #remotes::install_github("sizespectrum/mizerExperimental")
 library(mizerExperimental)
+
+library(plotly)
 
 ```
 
@@ -221,9 +224,8 @@ where $N_i(w)$ is the density of species $i$ in weight class $w$, and $prop(i)$ 
 
 In mizer, reproduction is linked to metabolism. The abundance in the smallest size class is proportional to the energy available to mature individuals for reproduction - i.e. the energy left over after subtracting metabolic costs (including energy to support growth) from the energy assimilated (by mature individuals) from feeding on prey.
 
-Now, to recreate this in mizer, we need to rewrite mizer's `project_simple()` function. We do this by making a new function, `new_project_simple()`, and using it in place of the default one:
+Now, to recreate this in mizer, we need to rewrite mizer's `project_simple()` function. We do this by making a new function, `new_project_simple()`, and using it in place of the default one. Note that there are two key changes in here: to change the boundary conditions ("reproduction") and to account for the conversion in abundance units from absolute abundance in ZooMSS to normalised abundance in ZooMizer.
 
-TODO: insert remaining temperature effects in here too.
 
 ```{r}
 new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
@@ -452,11 +454,11 @@ fZooMizer_run <- function(groups, input){
   tmax = input$tmax
 
   #data
-  groups$w_min <- 10^groups$w_min #convert from log10 values
-  groups$w_inf <- 10^groups$w_inf
-  groups$w_mat <- 10^groups$w_mat
-  groups$h <- 1e50 # should be Inf, but that breaks the calculations. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS
-  groups$ks <- 0 #turn off standard metabolism
+  # groups$w_min <- 10^groups$w_min #convert from log10 values
+  # groups$w_inf <- 10^groups$w_inf
+  # groups$w_mat <- 10^groups$w_mat
+  # groups$h <- 1e50 # should be Inf, but that breaks the calculations. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS
+  # groups$ks <- 0 #turn off standard metabolism
   #todo - ramp up constant repro for coexistence
 
   mf.params <- new_newMultispeciesParams(species_params=groups,
@@ -899,14 +901,14 @@ hack <- sim2 #making a "fake" MizerSim object that we can use plots on.
 
 #match ZooMSS data to that collected from zoomizer
 enviro <- readRDS("data/enviro_test20.RDS")
-zoomssgrid <- readRDS("Output/res_ZooMizer_yearly.RDS")
+zoomssgrid <- readRDS("Output/res_ZooMizer50yrs.RDS")
 zoomssgrid <- zoomssgrid[rank(enviro$CellID)]
 
 w <- matrix(hack@params@w, nrow = nrow(hack@params@species_params), ncol = length(hack@params@w), byrow = TRUE)
 dw <- matrix(hack@params@dw, nrow = nrow(hack@params@species_params), ncol = length(hack@params@dw), byrow = TRUE)
 
 #load in ZooMizer data for comparison
-zoomizergrid <- readRDS("test_grid.RDS")
+zoomizergrid <- readRDS("test_grid_50yrs.RDS")
 
 tmax <- dim(zoomizergrid[[1]]@n)[1]
 
@@ -962,4 +964,14 @@ fit <- lm(testdf$zoomizertcb~testdf$zoomsstcb)
 
 ```
 
+## Next steps
 
+There are a few benefits to using (Zoo)Mizer for the next steps in our model development.
+
+- **Modularity**: it's easy to customise the functions used for ingestion (feeding response type), growth, mortality, reproduction, etc. without changing anything else.
+
+- **Fish and fishing**: the functionality already exists in mizer to model different fishing rates and selectivity types, catchability, fishing effort and so on.
+
+- **Phytoplankton**: the phytoplankton abundance function can easily be changed to use semi-chemostat (default) or logistic models, fixed spectrum as in ZooMSS, inputs from ESMs and so on.
+
+- **Extra slots in the `MizerParams` and `MizerSim` classes**: we can use the `other_params` slot to load in extra parameters and include unstructured resources (such as detritus) in the `n_other` slot. Additional slots can also be added by editing the `emptyParams()` function.
