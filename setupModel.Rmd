@@ -1,10 +1,11 @@
 ---
 title: "Setting up a zooplankton model using mizer"
-author: "Patrick Sykes and Julia L. Blanchard"
-date: "July 22, 2020"
+author: "Patrick Sykes"
+date: "`r Sys.Date()`"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
+  word_document: default
 place: Brisbane
 ---
 
@@ -13,7 +14,11 @@ place: Brisbane
 
 Here we will recreate the ZooMSS model (version 2) in Heneghan et al. (2020) using mizer.
 
-We begin with some setup of required packages.
+There are some benefits to doing this. The main things for us are that mizer has a lot of functionality already that we would like to bring to ZooMSS, and a growing community that we can learn from and contribute to.
+
+There are a few important differences between the models (as I found out along the way). The most fundamental of these is that the governing PDE is in a different form in each model (ZooMSS works in absolute abundance over log-weight size classes, and mizer uses normalised abundance and absolute-weight size classes), and hence the numerics work out a bit differently. As we will see, "recreating" ZooMSS in mizer required changing the numerics in mizer to match how they work out in ZooMSS.
+
+Let's get started! We begin with some setup of required packages.
 
 ```{r setup, message=FALSE, warning=FALSE}
 #get required packages
@@ -29,7 +34,7 @@ require(tidyverse)
 #remotes::install_github("sizespectrum/mizerExperimental")
 library(mizerExperimental)
 
-library(plotly)
+#library(plotly)
 
 ```
 
@@ -43,7 +48,7 @@ groups <-read_csv("data/TestGroups_mizer.csv")
 groups$w_min <- 10^groups$w_min #convert from log10 values
 groups$w_inf <- 10^groups$w_inf
 groups$w_mat <- 10^groups$w_mat
-groups$h <- 1e50 # should be Inf, but that breaks the calculations. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS
+groups$h <- 1e50 # should be Inf, but that breaks the calculations. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS - not currently being used anyway.
 groups$ks <- 0 #turn off standard metabolism
 #todo - ramp up constant repro for coexistence
 
@@ -206,14 +211,14 @@ Try running it:
 
 sim <- project(mf.params)
 plot(sim) #note feeding level means satiation - 0 since there's no satiation in this model.
-plotlyBiomass(sim)
+plotBiomass(sim)
 #plotlyGrowthCurves(sim,species="macrozooplankton")
 #plotlyFeedingLevel(sim)
 # feeding level satiation for some groups, except for the seabirds
 # macrozooplankton - they are not growing enough,why?
 #tuneParams(mf.params)
 #plotlyGrowthCurves(sim,percentage = T)
-plotlySpectra(sim, power = 1)
+plotSpectra(sim, power = 1)
 ```
 
 
@@ -224,7 +229,7 @@ where $N_i(w)$ is the density of species $i$ in weight class $w$, and $prop(i)$ 
 
 In mizer, reproduction is linked to metabolism. The abundance in the smallest size class is proportional to the energy available to mature individuals for reproduction - i.e. the energy left over after subtracting metabolic costs (including energy to support growth) from the energy assimilated (by mature individuals) from feeding on prey.
 
-Now, to recreate this in mizer, we need to rewrite mizer's `project_simple()` function. We do this by making a new function, `new_project_simple()`, and using it in place of the default one. Note that there are two key changes in here: to change the boundary conditions ("reproduction") and to account for the conversion in abundance units from absolute abundance in ZooMSS to normalised abundance in ZooMizer.
+Now, to recreate this in mizer, we need to rewrite mizer's `project_simple()` function. We do this by making a new function, `new_project_simple()`, and using it in place of the default one. Note that there are two key changes in here: to change the boundary conditions ("reproduction") and to account for the conversion from absolute abundance over logged weight classes in ZooMSS to normalised abundance over absolute weight classes in ZooMizer (see the PDF write-up of this - it was a bit of journey to first realise that this could be a problem and then work out how to fix it).
 
 
 ```{r}
@@ -348,7 +353,7 @@ Now let's try that out:
 ```{r}
 sim2 <- project(mf.params, t_max = 100, dt = 001)
 plot(sim2)
-plotlySpectra(sim2, power = 0)
+plotSpectra(sim2, power = 0)
 ```
 
 Still missing is the differential prey nutrition based on prey carbon content. We'll do that by editing the `mizerEncounter()` function found in `project_methods.R`, and using `setRateFunction(params, "Encounter", "myEncounter")`. It might be possible to instead edit the chunk above too to incorporate the different method (since we've gone there anyway...)
@@ -886,7 +891,7 @@ enviro_row$tmax <- 25
 
 sim3 <- fZooMizer_run(groups, enviro_row)
 plot(sim3)
-plotlySpectra(sim3, power = 0)
+plotSpectra(sim3, power = 0)
 
 ```
 
