@@ -37,7 +37,7 @@
 \IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
 \hypersetup{
   pdftitle={Setting up a zooplankton model using mizer},
-  pdfauthor={Patrick Sykes and Julia L. Blanchard},
+  pdfauthor={Patrick Sykes},
   hidelinks,
   pdfcreator={LaTeX via pandoc}}
 \urlstyle{same} % disable monospaced font for URLs
@@ -101,8 +101,8 @@
 \setcounter{secnumdepth}{-\maxdimen} % remove section numbering
 
 \title{Setting up a zooplankton model using mizer}
-\author{Patrick Sykes and Julia L. Blanchard}
-\date{July 22, 2020}
+\author{Patrick Sykes}
+\date{2021-03-09}
 
 \begin{document}
 \maketitle
@@ -113,7 +113,20 @@
 Here we will recreate the ZooMSS model (version 2) in Heneghan et
 al.~(2020) using mizer.
 
-We begin with some setup of required packages.
+There are some benefits to doing this. The main things for us are that
+mizer has a lot of functionality already that we would like to bring to
+ZooMSS, and a growing community that we can learn from and contribute
+to.
+
+There are a few important differences between the models (as I found out
+along the way). The most fundamental of these is that the governing PDE
+is in a different form in each model (ZooMSS works in absolute abundance
+over log-weight size classes, and mizer uses normalised abundance and
+absolute-weight size classes), and hence the numerics work out a bit
+differently. As we will see, ``recreating'' ZooMSS in mizer required
+changing the numerics in mizer to match how they work out in ZooMSS.
+
+Let's get started! We begin with some setup of required packages.
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -173,7 +186,7 @@ Next let's read in the parameters from ZooMSS.
 \NormalTok{groups}\OperatorTok{$}\NormalTok{w_min <-}\StringTok{ }\DecValTok{10}\OperatorTok{^}\NormalTok{groups}\OperatorTok{$}\NormalTok{w_min }\CommentTok{#convert from log10 values}
 \NormalTok{groups}\OperatorTok{$}\NormalTok{w_inf <-}\StringTok{ }\DecValTok{10}\OperatorTok{^}\NormalTok{groups}\OperatorTok{$}\NormalTok{w_inf}
 \NormalTok{groups}\OperatorTok{$}\NormalTok{w_mat <-}\StringTok{ }\DecValTok{10}\OperatorTok{^}\NormalTok{groups}\OperatorTok{$}\NormalTok{w_mat}
-\NormalTok{groups}\OperatorTok{$}\NormalTok{h <-}\StringTok{ }\FloatTok{1e50} \CommentTok{# should be Inf, but that breaks the calculations. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS}
+\NormalTok{groups}\OperatorTok{$}\NormalTok{h <-}\StringTok{ }\FloatTok{1e50} \CommentTok{# should be Inf, but that breaks the calculations. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS - not currently being used anyway.}
 \NormalTok{groups}\OperatorTok{$}\NormalTok{ks <-}\StringTok{ }\DecValTok{0} \CommentTok{#turn off standard metabolism}
 \CommentTok{#todo - ramp up constant repro for coexistence}
 
@@ -392,8 +405,10 @@ Now, to recreate this in mizer, we need to rewrite mizer's
 function, \texttt{new\_project\_simple()}, and using it in place of the
 default one. Note that there are two key changes in here: to change the
 boundary conditions (``reproduction'') and to account for the conversion
-in abundance units from absolute abundance in ZooMSS to normalised
-abundance in ZooMizer.
+from absolute abundance over logged weight classes in ZooMSS to
+normalised abundance over absolute weight classes in ZooMizer (see the
+PDF write-up of this - it was a bit of journey to first realise that
+this could be a problem and then work out how to fix it).
 
 \begin{Shaded}
 \begin{Highlighting}[]
