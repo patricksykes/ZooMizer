@@ -50,13 +50,13 @@ setZooMizerConstants <- function(params, Groups, sst){
     ## Senescence mortality
     if (params@species_params$Type[i] == "Zooplankton") {
       M_sb[i,] <- ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
-      M_sb[i, params@species_params$w_inf[i] < params@w * (1 + 1e-06)] <- 0
+     # M_sb[i, params@species_params$w_inf[i] < params@w * (1 + 1e-06)] <- 0 # don't care about mortality of size classes not in the model anyway
       M_sb[i, params@species_params$w_mat[i] > params@w * (1 - 1e-06)] <- 0
     }
 
     if (params@species_params$Type[i] == "Fish") {
       M_sb[i,] <- 0.1*ZSpre*(params@w/(params@species_params$w_mat[i]))^ZSexp
-      M_sb[i, params@species_params$w_inf[i] < params@w * (1 + 1e-06)] <- 0
+    #  M_sb[i, params@species_params$w_inf[i] < params@w * (1 + 1e-06)] <- 0 # don't care about mortality of size classes not in the model anyway
       M_sb[i, params@species_params$w_mat[i] > params@w * (1 - 1e-06)] <- 0
     }
 
