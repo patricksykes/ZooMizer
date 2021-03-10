@@ -79,13 +79,10 @@ setZooMizerConstants <- function(params, Groups, sst){
       # The feeding kernel of filter feeders is not expected to change  with increasing size so we fix it here
 
       # if (param$fixed_filterPPMR == TRUE){
-      if (i == 3) {
-        pred_kernel[i, , ] <- matrix(pred_kernel[i,44,], nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
+      if (Groups$FeedType[i] == "FilterFeeder") {
+        pred_kernel[i, , ] <- matrix(pred_kernel[i,params@w_min_idx[i],], nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
       }
-      if (i == 8) {
-        pred_kernel[i, , ] <- matrix(pred_kernel[i,61,], nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
-      }
-      # }
+          # }
 
     } else { # If group does not have an m-value (fish)
       beta_mat <- matrix(params@species_params$PPMR[i], nrow = length(params@w), ncol = length(params@w_full))
