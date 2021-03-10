@@ -62,8 +62,8 @@ setZooMizerConstants <- function(params, Groups, sst){
 
     ### Search volume
     SearchVol[i,] <- (params@species_params$gamma[i])*(params@w^(params@species_params$q[i]))
-    SearchVol[i, params@species_params$w_inf[i] < params@w * (1 + 1e-06)] <- 0
-    SearchVol[i, params@species_params$w_min[i] > params@w * (1 + 1e-06)] <- 0
+    # SearchVol[i, params@species_params$w_inf[i] < params@w * (1 + 1e-06)] <- 0
+    # SearchVol[i, params@species_params$w_min[i] > params@w * (1 + 1e-06)] <- 0
 
     ### Predation Kernels
     if (is.na(params@species_params$PPMRscale[i]) == FALSE){ # If group has an m-value (zooplankton)
@@ -94,7 +94,7 @@ setZooMizerConstants <- function(params, Groups, sst){
     }
 
   }
-  SearchVol[12,178] <- (params@species_params$gamma[12])*(params@w[178]^(params@species_params$q[12])) #adding last size class by hand
+  # SearchVol[12,178] <- (params@species_params$gamma[12])*(params@w[178]^(params@species_params$q[12])) #adding last size class by hand
 
   #temperature effect
   M_sb <- params@other_params$temp_eff * M_sb * 10 # Incorporate temp effect on senscence mortality
