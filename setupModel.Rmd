@@ -462,20 +462,21 @@ hack <- sim2 #making a "fake" MizerSim object that we can use plots on.
 
 #match ZooMSS data to that collected from zoomizer
 enviro <- readRDS("data/enviro_test20.RDS")
-zoomssgrid <- readRDS("zoomssgrid_redo_yearly.rds")
+zoomssgrid <- readRDS("Output/res_20210309_20cells.RDS")
 zoomssgrid <- zoomssgrid[rank(enviro$CellID)]
 
 w <- matrix(hack@params@w, nrow = nrow(hack@params@species_params), ncol = length(hack@params@w), byrow = TRUE)
 dw <- matrix(hack@params@dw, nrow = nrow(hack@params@species_params), ncol = length(hack@params@dw), byrow = TRUE)
 
 #load in ZooMizer data for comparison
-zoomizergrid <- readRDS("test_grid.RDS")
+zoomizergrid <- readRDS("test_grid_20210309.RDS")
 
 tmax <- dim(zoomizergrid[[1]]@n)[1]
 
 pzoomizer <- list()
 for (i in 1:length(zoomizergrid)) {
-  zoomizergrid[[i]]@n[tmax,,] <- apply(as.array(zoomizergrid[[i]]@n[ceiling(tmax/2):tmax,,]),c(2,3),'mean') #apples-to-apples comparison
+  zoomizergrid[[i]]@n[tmax,,] <- #apply(as.array(zoomizergrid[[i]]@n[ceiling(tmax/2):tmax,,]),c(2,3),'mean')
+    colMeans(zoomizergrid[[i]]@n[(ceiling(0.5*(dim(zoomizergrid[[i]]@n)[1])):dim(zoomizergrid[[i]]@n)[1]),,], dims = 1)#apples-to-apples comparison
   pzoomizer[[i]] <- plotSpectra(zoomizergrid[[i]], time_range = tmax-1, power = 1)+labs(title = paste("ZooMizer plot",i))
 }
 
@@ -509,7 +510,7 @@ testdf$zoomsstcb[i] = sum(hack@n[i,,]*w*dw)
 testdf$zoomizertcb[i] = sum(zoomizergrid[[i]]@n[tmax,,]*w*dw)
 }
 
-(scatter <- ggplot(testdf, aes(x=log10(zoomsstcb), y=log10(zoomizertcb)))+
+(scatter <- ggplot(testdf, aes(x=zoomsstcb, y=zoomizertcb))+
     geom_abline(slope = 1, intercept = 0) +
     geom_point()+
     geom_smooth(method = 'lm'))
@@ -517,9 +518,9 @@ testdf$zoomizertcb[i] = sum(zoomizergrid[[i]]@n[tmax,,]*w*dw)
 ggsave("zoomss_zoomizer_comparison_tcb.png",scatter)
 
 testdf$chlo <- enviro$chlo[1:nrow(testdf)]
-(chlotcb <- ggplot(data=testdf, aes(x=log10(chlo),y=log10(zoomizertcb)))+
+(chlotcb <- ggplot(data=testdf, aes(x=log10(chlo),y=log10(zoomsstcb)))+
   geom_point())
-ggsave("zoomizer_tcb_vs_chlo.png", chlotcb)
+ggsave("zoomss_tcb_vs_chlo.png", chlotcb)
 
 fit <- lm(testdf$zoomizertcb~testdf$zoomsstcb)
 
