@@ -119,7 +119,7 @@ setZooMizerConstants <- function(params, Groups, sst){
   #dimnames(tempN) <- dimnames(params@initial_n)
   params@initial_n[] <- tempN
   
-  SearchVol <- readRDS("data/SearchVol.rds")
+  #SearchVol <- readRDS("data/SearchVol.rds")
   
   params <- setExtMort(params, z0 = M_sb)
   params <- setSearchVolume(params, search_vol = SearchVol)
@@ -238,7 +238,7 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
   }
 
   for (i in 1:no_sp) {
-    n[i, w_max_idx[i]] <- 0
+    n[i, which(1:no_w >= w_max_idx[i])] <- 0
   }
   
     
@@ -385,7 +385,8 @@ fZooMizer_run <- function(groups, input){
   mf.params <- setRateFunction(mf.params, "PredRate", "new_PredRate")
   mf.params <- setReproduction(mf.params, repro_prop = matrix(0, nrow = nrow(mf.params@psi), ncol = ncol(mf.params@psi)))
 
-
+  #mf.params@search_vol[] <- readRDS("data/SearchVol.rds")
+  #mf.params <- setSearchVolume(mf.params)
   #mf.params <- setmort_test(mf.params, sst)
   M_sb <- getExtMort(mf.params)
   M_sb[] <- readRDS("data/mu_b.RDS")
