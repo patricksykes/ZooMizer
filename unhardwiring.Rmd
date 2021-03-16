@@ -1,0 +1,60 @@
+---
+title: "Un-hardwiring ZooMizer"
+author: "Patrick Sykes"
+date: "16/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(mizer)
+library(assertthat)
+library(tidyverse)
+```
+
+## Load in basic data
+
+```{r data}
+
+ID <- 1
+
+control <- readRDS("test_grid_20210309.RDS")[[ID]]
+
+enviro_row <- readRDS("data/enviro_test20.RDS")[ID,]
+
+
+groups <- read.csv("data/TestGroups_mizer.csv")
+
+```
+
+## Run updated version
+
+```{r run}
+
+source("fZooMizer_run.R")
+
+environment(new_project_simple) <- asNamespace('mizer')
+assignInNamespace("project_simple", new_project_simple, ns = "mizer")
+
+environment(new_newMultispeciesParams) <- asNamespace('mizer')
+assignInNamespace("newMultispeciesParams", new_newMultispeciesParams, ns = "mizer")
+
+environment(new_emptyParams) <- asNamespace('mizer')
+assignInNamespace("emptyParams", new_emptyParams, ns = "mizer")
+
+
+enviro_row$tmax <- 50
+
+new <- fZooMizer_run(groups, enviro_row)
+
+all.equal(new@n_pp[1,], control@n_pp[1,])
+all.equal(new@n[1,,], control@n[1,,])
+all.equal(new@params@search_vol, control@params@search_vol)
+all.equal(new@params@mu_b, control@params@mu_b)
+
+all.equal(new@params@w_full, control@params@w_full)
+
+all.equal(new@n[2,,], control@n[2,,])
+all.equal(new@n[enviro_row$tmax+1,,], control@n[enviro_row$tmax+1,,])
+
+```
