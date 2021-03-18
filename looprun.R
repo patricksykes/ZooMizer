@@ -47,7 +47,7 @@ for (i in 1:nrow(enviro)) {
   rm(sim)
 }
 
-saveRDS(zoomizergrid, file="test_grid.RDS", version = 2)
+saveRDS(zoomizergrid, file="test_grid_20210309.RDS", version = 2)
 
 # #apples to apples comparison:
 # 
