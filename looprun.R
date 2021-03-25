@@ -8,11 +8,11 @@ source("fZooMSS_CalculatePhytoParam.R")
 environment(new_project_simple) <- asNamespace('mizer')
 assignInNamespace("project_simple", new_project_simple, ns = "mizer")
 
-environment(new_newMultispeciesParams) <- asNamespace('mizer')
-assignInNamespace("newMultispeciesParams", new_newMultispeciesParams, ns = "mizer")
-
-environment(new_emptyParams) <- asNamespace('mizer')
-assignInNamespace("emptyParams", new_emptyParams, ns = "mizer")
+# environment(new_newMultispeciesParams) <- asNamespace('mizer')
+# assignInNamespace("newMultispeciesParams", new_newMultispeciesParams, ns = "mizer")
+# 
+# environment(new_emptyParams) <- asNamespace('mizer')
+# assignInNamespace("emptyParams", new_emptyParams, ns = "mizer")
 
 
 Groups <- read.csv("data/TestGroups_mizer.csv")
@@ -47,7 +47,7 @@ for (i in 1:nrow(enviro)) {
   rm(sim)
 }
 
-saveRDS(zoomizergrid, file="test_grid_20210309.RDS", version = 2)
+saveRDS(zoomizergrid, file="test_grid_20210317.RDS", version = 2)
 
 # #apples to apples comparison:
 # 

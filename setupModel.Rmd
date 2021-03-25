@@ -469,7 +469,7 @@ w <- matrix(hack@params@w, nrow = nrow(hack@params@species_params), ncol = lengt
 dw <- matrix(hack@params@dw, nrow = nrow(hack@params@species_params), ncol = length(hack@params@dw), byrow = TRUE)
 
 #load in ZooMizer data for comparison
-zoomizergrid <- readRDS("test_grid_20210309.RDS")
+zoomizergrid <- readRDS("test_grid_20210317.RDS")
 
 tmax <- dim(zoomizergrid[[1]]@n)[1]
 
@@ -518,7 +518,7 @@ testdf$zoomizertcb[i] = sum(zoomizergrid[[i]]@n[tmax,,]*w*dw)
 ggsave("zoomss_zoomizer_comparison_tcb.png",scatter)
 
 testdf$chlo <- enviro$chlo[1:nrow(testdf)]
-(chlotcb <- ggplot(data=testdf, aes(x=log10(chlo),y=log10(zoomsstcb)))+
+(chlotcb <- ggplot(data=testdf, aes(x=log10(chlo),y=log10(zoomizertcb)))+
   geom_point())
 ggsave("zoomss_tcb_vs_chlo.png", chlotcb)
 
