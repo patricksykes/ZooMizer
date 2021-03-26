@@ -36,16 +36,16 @@ We now build the model:
 
 ```{r setup_params}
 
-#fish_params <- NS_params  # or any other mizer params object
-# fish_params <- newMultispeciesParams(species_params = NS_species_params,
-#                                      interaction = inter,
-#                                      min_w_pp = 10^(-14.5),
-#                                      #gear_params = NS_species_params_gears
-#                                      kappa = 10^(input$phyto_int),
-#                                      lambda = 1-input$phyto_slope
-#                                      )
+# fish_params <- NS_params  # or any other mizer params object
+fish_params <- newMultispeciesParams(species_params = NS_species_params,
+                                     interaction = inter,
+                                     min_w_pp = 10^(-14.5),
+                                     #gear_params = NS_species_params_gears
+                                     kappa = 10^(input$phyto_int),
+                                     lambda = 1-input$phyto_slope
+                                     )
 
-fish_params <- newTraitParams(min_w_pp = 10^(-14.5), kappa = 10^(input$phyto_int), lambda = 2)
+# fish_params <- newTraitParams(min_w_pp = 10^(-14.5), kappa = 10^(input$phyto_int), lambda = 2)
 
 zoo_params <- newZooMizerParams(groups = groups, input = input, fish_params = fish_params)
 
@@ -80,5 +80,11 @@ Tuning etc
 tuned_erepro <- retune_erepro(fish_params)
 
 tuned_sim <- project(tuned_erepro, t_max = 5, dt = 0.1)
+
+```
+
+```{r plots}
+plotSpectra(sim, wlim = c(tuned_sim@params@w_full[1], 1000))
+plotSpectra(tuned_sim, wlim = c(tuned_sim@params@w_full[1], 1000))
 
 ```
