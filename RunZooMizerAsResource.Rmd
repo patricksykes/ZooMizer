@@ -1,0 +1,48 @@
+---
+title: "Run Mizer with ZooMizer as a resource"
+author: "Patrick Sykes"
+date: "26/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Set up the model
+
+Load in required libraries and functions:
+
+```{r libraries}
+
+library(mizer)
+library(tidyverse)
+source("ZooMizerResourceFunctions.R")
+```
+
+Now the data needed to run the model
+```{r data}
+
+groups <- read.csv("data/TestGroups_mizer.csv") #load in ZooMSS groups
+groups <- groups[which(groups$Type == "Zooplankton"),] #just keep the zooplankton
+
+ID <- 1  # pick a row to use of the environment data
+input <- readRDS("data/enviro_test20.RDS")[ID,]
+
+```
+
+We now build the model:
+
+```{r setup_params}
+
+zoo_params <- newZooMizerParams(groups = groups, input = input)
+fish_params <- NS_params  # or any other mizer params object
+
+fish_params <- fish_params %>% 
+    setComponent(component = "zoo",
+                 initial_value = zoo_params@initial_n,
+                 dynamics_fun = "zoo_dynamics",
+                 component_params = zoo_params) %>% 
+    setResource(resource_dynamics = "resource_zooMizer")
+
+```
