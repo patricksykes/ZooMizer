@@ -11,7 +11,7 @@ setZooMizerConstants <- function(params, Groups, sst){
   M_sb <- getExtMort(params)
   ZSpre <- 1 # senescence mortality prefactor
   ZSexp <- 0.3 # senescence mortality exponent
-  
+
   pred_kernel <- getPredKernel(params)
   prey_weight_matrix <- matrix(params@w_full, nrow = length(params@w), ncol = length(params@w_full), byrow = TRUE)
   pred_weight_matrix <- matrix(params@w, nrow = length(params@w), ncol = length(params@w_full))
@@ -81,7 +81,7 @@ setZooMizerConstants <- function(params, Groups, sst){
   props_z <- params@species_params$Prop[params@species_params$Type == "Zooplankton"] # Zooplankton proportions
   tempN[params@species_params$Type == "Zooplankton",] <- props_z * tempN[params@species_params$Type == "Zooplankton",] # Set abundances of diff zoo groups based on smallest size class proportions
   tempN[params@species_params$Type == "Fish",] <- (1/sum(params@species_params$Type == "Fish")) * tempN[params@species_params$Type=="Fish",] # Set abundandances of fish groups based on smallest size class proportions
-  
+
   # For each group, set densities at w > Winf and w < Wmin to 0
   params@species_params$w_min <- params@w[params@w_min_idx]
   tempN[unlist(tapply(round(log10(params@w), digits = 2), 1:length(params@w), function(wx,Winf) Winf < wx, Winf = log10(params@species_params$w_inf)))] <- 0
@@ -210,10 +210,11 @@ zoo_dynamics <- function(params, n_other, rates, t, dt, ...) {
   
   zoo_idx <- (length(zoo_params@w_full) - length(zoo_params@w) + 1):length(zoo_params@w_full)
   
-  no_gps_in_size_class <- colSums(n_other$zoo > 1)
+  no_grps_in_size_class <- colSums(n_other$zoo > 0)
+  no_grps_in_size_class[which(no_grps_in_size_class == 0)] <- 1
+  if(any(no_grps_in_size_class == 0)) {stop("NaNs produced by mort / # of groups") }
   
-  
-  mort_from_fish <- matrix(total_mort_from_fish[zoo_idx] / no_gps_in_size_class, byrow = TRUE, nrow = nrow(zoo_params@species_params), ncol = length(zoo_params@w))
+  mort_from_fish <- matrix(total_mort_from_fish[zoo_idx] / no_grps_in_size_class, byrow = TRUE, nrow = nrow(zoo_params@species_params), ncol = length(zoo_params@w))
   
   
   # add mortality of fish eating zoo to the external mortality. Better if this was done as a fishing mortality?
@@ -229,7 +230,7 @@ zoo_dynamics <- function(params, n_other, rates, t, dt, ...) {
                           n_pp = zoo_params@initial_n_pp,
                           n_other = list(),
                           t = t, dt = zoo_dt, steps = steps,
-                          effort = list(),
+                          effort = NULL,
                           resource_dynamics_fn = resource_constant,
                           other_dynamics_fns = list(),
                           rates_fns = lapply(zoo_params@rates_funcs, get))
@@ -254,7 +255,7 @@ zoo_dynamics <- function(params, n_other, rates, t, dt, ...) {
 #'   plankton types, with one entry for each weight in `params@w_full`
 resource_zooMizer <- function(params, n_other, ...) {
   # get the MizerParams object for the zooplankton
-  zoo_params <- other_params(params)$zoo
+  zoo_params <- params@other_params$zoo$params
   # phytoplankton abundances stay constant
   n_pp <- zoo_params@initial_n_pp
   # get array (type x size) with the current zooplankton abundances
@@ -263,9 +264,9 @@ resource_zooMizer <- function(params, n_other, ...) {
   
   # TODO Patrick:
   # Now add n and n_pp and put it into a vector of the right length
-  zoo_idx <- (length(params@w_full) - length(params@w) + 1):length(params@w_full)
-  total_n <- n_pp
-  total_n[zoo_idx] <- total_n[zoo_idx] + colSums(n)
+  zoo_idx <- (length(zoo_params@w_full) - length(zoo_params@w) + 1):length(zoo_params@w_full)
+  total_n <- n_pp * 0 #NOTE: this means no fish feeding on phyto
+  total_n[zoo_idx] <- total_n[zoo_idx] + n 
   
   return(total_n)
 }
@@ -360,7 +361,7 @@ new_project_simple <- function(params, n, n_pp, n_other, t, dt, steps,
     #     for (j in (params@w_min_idx[i]+1):no_w)
     #         n[i,j] <- (S[i,j] - A[i,j]*n[i,j-1]) / B[i,j]
     # This is implemented via Rcpp
-    n <- inner_project_loop(no_sp = no_sp, no_w = no_w, n = n,
+    n <- mizer:::inner_project_loop(no_sp = no_sp, no_w = no_w, n = n,
                             A = a, B = b, S = S,
                             w_min_idx = params@w_min_idx)
     

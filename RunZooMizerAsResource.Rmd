@@ -27,7 +27,7 @@ Now the data needed to run the model
 groups <- read.csv("data/TestGroups_mizer.csv") #load in ZooMSS groups
 groups <- groups[which(groups$Type == "Zooplankton"),] #just keep the zooplankton
 
-ID <- 1  # pick a row to use of the environment data
+ID <- 20  # pick a row to use of the environment data
 input <- readRDS("data/enviro_test20.RDS")[ID,]
 
 ```
@@ -37,13 +37,18 @@ We now build the model:
 ```{r setup_params}
 
 #fish_params <- NS_params  # or any other mizer params object
-fish_params <- newMultispeciesParams(species_params = NS_species_params,
-                                     interaction = inter,
-                                     min_w_pp = 10^(-14.5),
-                                     #gear_params = NS_species_params_gears
-                                     )
+# fish_params <- newMultispeciesParams(species_params = NS_species_params,
+#                                      interaction = inter,
+#                                      min_w_pp = 10^(-14.5),
+#                                      #gear_params = NS_species_params_gears
+#                                      kappa = 10^(input$phyto_int),
+#                                      lambda = 1-input$phyto_slope
+#                                      )
+
+fish_params <- newTraitParams(min_w_pp = 10^(-14.5), kappa = 10^(input$phyto_int), lambda = 2)
 
 zoo_params <- newZooMizerParams(groups = groups, input = input, fish_params = fish_params)
+
 
 fish_params <- fish_params %>% 
     setComponent(component = "zoo",
@@ -53,12 +58,27 @@ fish_params <- fish_params %>%
                  ) %>% 
     setResource(resource_dynamics = "resource_zooMizer")
 
+initialNResource(fish_params) <- resource_zooMizer(fish_params, fish_params@initial_n_other)
+
 ```
 
 And run it:
 
 ```{r run}
 
-sim <- project(fish_params)
+sim <- project(fish_params, t_max = 5, dt = 0.1)
+plot(sim)
+
+
+```
+
+Tuning etc
+
+```{r}
+
+#steady_fish <-  steady(fish_params)
+tuned_erepro <- retune_erepro(fish_params)
+
+tuned_sim <- project(tuned_erepro, t_max = 5, dt = 0.1)
 
 ```
