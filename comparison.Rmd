@@ -1,0 +1,585 @@
+---
+title: "Comparing ZooMSS and ZooMizer"
+author: "Patrick Sykes"
+output:
+  html_document:
+    df_print: paged
+place: Brisbane
+---
+
+# Introduction
+
+Here we are trying to compare the original code ZooMSS model (version 2, Heneghan et al. 2020) with ZooMizer, an attempt at recreating it within the mizer package.
+
+We start by initialising and running the two models.
+
+
+```{r setup}
+library(mizer)
+library(Rcpp)
+
+source("fZooMSS_Model.R") #source the model code
+source("fZooMSS_Setup.R")
+source("fZooMSS_CalculatePhytoParam.R")
+#Rcpp::sourceCpp("fZooMSS_MvF_Rcpp.cpp") #explicitly using same numerics as mizer
+#setwd("~/GitHub/ZooMizer/")
+## Build environmental data
+#enviro <- readRDS("data/enviro_test20.RDS")
+enviro <- readRDS("data/envirofull_20200317.RDS")
+enviro_data <- fZooMSS_CalculatePhytoParam(enviro) # Calculate Phytoplankton Parameters
+Groups <- read.csv("TestGroups.csv") #[c(1,3,12),]
+#Groups$Carbon <- 0.1
+#Groups$Prop[-3] <- 0
+
+
+
+dt <- 00.1
+input_params <- enviro_data[967,]
+input_params$dt <- dt
+input_params$tmax <- 10
+SaveTimeSteps <- TRUE
+
+zoomsstest <- list()
+zoomsstest$model$model_runtime <- system.time(
+ zoomsstest <- fZooMSS_Model(input_params, Groups, SaveTimeSteps)
+)
+saveRDS(zoomsstest,"zoomssoutputdt1.rds")
+zoomsstest <- readRDS("zoomssoutputdt1.rds")
+
+input_params$tmaxx <- input_params$tmax
+
+source("fZooMizer_run.R")
+environment(new_project_simple) <- asNamespace('mizer')
+assignInNamespace("project_simple", new_project_simple, ns = "mizer")
+
+environment(new_newMultispeciesParams) <- asNamespace('mizer')
+assignInNamespace("newMultispeciesParams", new_newMultispeciesParams, ns = "mizer")
+
+environment(new_emptyParams) <- asNamespace('mizer')
+assignInNamespace("emptyParams", new_emptyParams, ns = "mizer")
+
+#setValidity("MizerParams", new_validMizerParams)
+
+groups <- read.csv("data/TestGroups_mizer.csv") #[c(1,3),]
+#groups$Carbon <- 0.1
+#groups$Prop[-3] <- 0
+
+zoomizertest <- fZooMizer_run(groups = groups, input = input_params)
+```
+
+Let's try and look at some comparisons...
+
+# Initial values
+
+We want to check that the initial setups were all the same. the `all.equal` function tests the 'near equality' of two objects, that is, whether the objects are equal to within a tolerance (by default the tolerance is 1.5e-8). It's appropriate to use that here to allow for small floating point errors introduced by unit conversions and converting back and forth between absolute and logged values.
+
+```{r collapse=TRUE}
+
+#weight vectors (i.e. size classes)
+length(zoomsstest$model$param$w_phyto) == sum(zoomizertest@n_pp[1,] > 0) #phyto cuts off at same place?
+
+all.equal(zoomsstest$model$param$w, zoomizertest@params@w, check.attributes=FALSE)
+
+all.equal(zoomsstest$model$param$w_phyto, zoomizertest@params@w_full[1:length(zoomsstest$model$param$w_phyto)],check.attributes=FALSE)
+
+#abundances - phyto - dimensions time x weight
+all.equal(zoomizertest@n_pp[1,1:length(zoomsstest$model$param$w_phyto)] *
+            zoomizertest@params@dw_full[1:length(zoomsstest$model$nPP)],
+          zoomsstest$model$nPP,check.attributes=FALSE)
+
+#abundances - zoo and fish. Note N is in dimensions time x weight x species
+all.equal(zoomsstest$model$N[1,,] , zoomizertest@params@initial_n*matrix(zoomizertest@params@dw,nrow=zoomsstest$model$param$ngrps, ncol = length(zoomsstest$model$param$w), byrow=TRUE), check.attributes=FALSE)
+#View(zoomsstest$model$N[1,,] / matrix(zoomsstest$model$param$w,nrow=zoomsstest$model$param$ngrps, ncol = length(zoomsstest$model$param$w), byrow=TRUE))
+#View(zoomizertest@params@initial_n)
+
+#initialnsaved <- readRDS("data/initialn.RDS")
+all.equal(zoomsstest$model$N[1,,] , sweep(zoomizertest@params@initial_n, 2, zoomizertest@params@dw, "*"), check.attributes=FALSE)
+# quick check here: abundances at the end?
+all.equal(sweep(zoomizertest@n[nrow(zoomizertest@n),,],2, zoomizertest@params@dw, "*"), zoomsstest$model$N[nrow(zoomsstest$model$N),,] , check.attributes=FALSE)
+
+
+```
+
+So we have that the size classes and initial abundance values (taking into account that ZooMSS is in absolute abundance and ZooMizer is in normalised abundance) are all in agreement. However, after a single time step they differ by a lot! Let's look into what might be doing this.
+
+Recall the McKendrick-von Foerster equation
+
+$$ \frac{\partial}{\partial t} N_i(w,t) = - \frac{\partial}{\partial w} (g_i(w,t) N_i(w,t)) - \mu_i(w,t)N_i(w,t), $$
+where $g_i$ is growth (which is due to feeding) and $\mu_i$ is mortality (due to senescence and predation).
+
+Let's look at the first term on the right-hand side: growth.
+
+# Growth due to feeding
+
+Trying with the actual growth matrices. Both Mizer and ZooMSS use g/yr as the units.
+
+```{r}
+
+param <- zoomsstest$model$param
+model <- zoomsstest$model
+
+growth_multiplier <- colSums(model$N[1,,] * model$assim_eff) # 1 x n_sizes
+predation_multiplier <- model$N[1,,] * model$temp_eff # n_species x n_sizes
+
+### DO GROWTH
+dynam_growthkernel <- model$dynam_growthkernel
+dim(dynam_growthkernel) <- c(param$ngrps*param$ngrid, param$ngrid)
+cs <- .colSums(growth_multiplier * t(dynam_growthkernel), m = param$ngrid, n = param$ngrps*param$ngrid)
+dim(cs) <- c(param$ngrps, param$ngrid)
+gg <- model$ingested_phyto + cs
+  
+zoomizererepro <- getERepro(zoomizertest@params) #all 0 as expected
+zoomizerereprogrowth <- getEReproAndGrowth(zoomizertest@params)
+zoomizeregrowth <- getEGrowth(zoomizertest@params)
+
+
+all.equal(zoomizeregrowth, zoomizerereprogrowth) #should be equal since no energy goes to repro
+
+all.equal(zoomizeregrowth[,2:178], gg[,1:177], check.attributes=FALSE) #it was really close earlier with zoomizeregrowth/w, now mizer's N is in 1/g so perhaps this is the right conversion?
+```
+
+Looking at the matrices, it's clearly not right. Though it's not completely clear whether the difference abundance units may be affecting this. Consider the function for growth:
+
+$$ g_i(w,t) = \tau \sum_{j} 2.5 C_j V_i(w)\int_{w_p}^{w} \phi_i (w,w')N_j(w',t)w'dw' $$
+
+The growth in ZooMSS is calculated from temperature effect constant $\tau$, prey carbon content $C_j$, the search volume $V_i(w)$, and prey size selectivity function $\phi_i(w,w')$. Let's look at these one at a time:
+
+## Temperature effect
+
+```{r}
+
+all.equal(zoomsstest$model$temp_eff, zoomizertest@params@other_params$temp_eff)
+
+```
+
+## Prey carbon / assimilation efficiency
+
+Note that in ZooMSS, the assimilation efficiency is a (prey species) $\times$ (prey size) matrix, while it's a (predator species) $\times$ (prey species) matrix in Mizer. This is simply fixed for each prey species though, so we can compare the ZooMSS value with the transpose of the ZooMizer value.
+
+```{r}
+
+all.equal(zoomsstest$model$assim_eff[,1:12], t(zoomizertest@params@other_params$assim_eff))
+
+```
+
+
+## Search volume
+
+```{r}
+
+#zoomss code
+SearchVol <- matrix(NA, nrow = zoomsstest$model$param$ngrps, ncol = zoomsstest$model$param$ngrid)
+for(i in 1:zoomsstest$model$param$ngrps){
+        ### Search volume
+    SearchVol[i,] <- (zoomsstest$model$param$Groups$SearchCoef[i])*(zoomsstest$model$param$w^(zoomsstest$model$param$Groups$SearchExp[i]))
+    SearchVol[i, 10^(zoomsstest$model$param$Groups$Wmax[i]) < zoomsstest$model$param$w] <- 0
+    SearchVol[i, 10^(zoomsstest$model$param$Groups$W0[i]) > zoomsstest$model$param$w] <- 0
+    
+}
+
+
+all.equal(SearchVol, zoomizertest@params@search_vol, check.attributes=FALSE)
+
+```
+
+These are in agreement. How about feeding kernels?
+
+```{r}
+
+  
+  gg_log_t_phyto <- ((param$w^-1) %*% t(param$w_phyto))/log(10) # Growth
+  diet_log_t_phyto <- matrix(param$w_phyto, nrow = length(param$w), ncol = length(param$w_phyto), byrow = TRUE) # Diet/Ingestion
+
+  # Predators are rows, dynam prey weights are columns
+  gg_log_t_dynam <- ((param$w^-1) %*% t(param$w))/log(10) # Growth
+  diet_log_t_dynam <- matrix(param$w, nrow = length(param$w), ncol = length(param$w), byrow = TRUE) # Diet/ingestion
+
+  ### PREDATION KERNELS FOR PHYTOPLANKTON SPECTRUM AND DYNAMIC SPECTRUM
+  phyto_pred_weight_matrix <- matrix(param$w, nrow = param$ngrid, ncol = param$ngridPP)
+  dynam_pred_weight_matrix <- matrix(param$w, nrow = param$ngrid, ncol = param$ngrid)
+  phyto_prey_weight_matrix <- matrix(param$w_phyto, nrow = param$ngrid, ncol = param$ngridPP, byrow = TRUE)
+  dynam_prey_weight_matrix <- matrix(param$w, nrow = param$ngrid, ncol = param$ngrid, byrow = TRUE)
+
+  ## Search Volume storage
+  SearchVol <- matrix(NA, nrow = param$ngrps, ncol = param$ngrid) # Search volume
+
+  # Simpson's Rule matrices for growth, diffusion and mortality integrals
+  simp_phyto <- array(1, dim = param$ngridPP)
+  simp_phyto[c(seq(2, param$ngridPP-1,2))] <- 4
+  simp_phyto[c(seq(3, param$ngridPP-1,2))] <- 2
+  sm_phyto <- matrix(simp_phyto, nrow = param$ngrid, ncol = param$ngridPP, byrow = TRUE) * (param$dx/3)
+
+  simp_dynam <- array(1, dim = param$ngrid)
+  simp_dynam[c(seq(2, param$ngrid-1,2))] <- 4
+  simp_dynam[c(seq(3, param$ngrid-1,2))] <- 2
+  sm_dynam <- matrix(simp_dynam, nrow = param$ngrid, ncol = param$ngrid, byrow = TRUE) * (param$dx/3)
+  
+   ### Q10 OF 2 FOR ALL ZOO AND FISH
+  temp_zoo <- rep(2.^((param$sst - 30)/10), param$num_zoo) # exp(23.93 - 0.59/(8.62e-05*(273+environ$sst)))
+  temp_fish <- rep(2.^((param$sst - 30)/10), param$num_fish)
+  temp_eff <- matrix(c(temp_zoo, temp_fish), nrow = param$ngrps, ncol = param$ngrid)
+
+  
+  phyto_predkernel <- array(0, dim=c(param$ngrps,param$ngrid,param$ngridPP))
+  dynam_predkernel <- array(0, dim=c(param$ngrps,param$ngrid,param$ngrid))
+  #### CALCULATES CONSTANT BITS OF THE MODEL FUNCTIONS FOR EACH GROUP
+  for(i in 1:param$ngrps){
+    ## Senescence mortality
+    if(i < 10){
+      model$M_sb[i,] <- param$ZSpre*(param$w/(10^(param$Groups$Wmat[i])))^param$ZSexp
+      model$M_sb[i, 10^(param$Groups$Wmax[i]) < param$w] <- 0
+      model$M_sb[i, 10^(param$Groups$Wmat[i]) > param$w] <- 0
+    }
+
+    if(i > 9){
+      model$M_sb[i,] <- 0.1*param$ZSpre*(param$w/(10^(param$Groups$Wmat[i])))^param$ZSexp
+      model$M_sb[i, 10^(param$Groups$Wmax[i]) < param$w] <- 0
+      model$M_sb[i, 10^(param$Groups$Wmat[i]) > param$w] <- 0
+    }
+
+    ### Search volume
+    SearchVol[i,] <- (param$Groups$SearchCoef[i])*(param$w^(param$Groups$SearchExp[i]))
+    SearchVol[i, 10^(zoomsstest$model$param$Groups$Wmax[i]) < zoomsstest$model$param$w * (1 + 1e-06)] <- 0
+    SearchVol[i, 10^(zoomsstest$model$param$Groups$W0[i]) > zoomsstest$model$param$w * (1 - 1e-06)] <- 0
+
+    ### Predation Kernels
+    if(is.na(param$Groups$PPMRscale[i]) == FALSE){ # If group has an m-value (zooplankton)
+      # Calculate PPMR for zooplankton, which changes according to body-size (Wirtz, 2012)
+      D.z <- 2*(3*param$w*1e12/(4*pi))^(1/3) # convert body mass g to ESD (um)
+      betas <- (exp(0.02*log(D.z)^2 - param$Groups$PPMRscale[i] + 1.832))^3 # Wirtz's equation
+      beta_mat_phyto <- matrix(betas, nrow = param$ngrid, ncol = param$ngridPP)
+      beta_mat_dynam <- matrix(betas, nrow = param$ngrid, ncol = param$ngrid)
+
+      # Calculate feeding kernels
+      phyto_predkernel[i,,] <- exp(-0.5*(log((beta_mat_phyto*phyto_prey_weight_matrix)/
+                                            phyto_pred_weight_matrix)/param$Groups$FeedWidth[i])^2)/
+        sqrt(2*pi*param$Groups$FeedWidth[i]^2)
+      dynam_predkernel[i,,] <- exp(-0.5*(log((beta_mat_dynam*dynam_prey_weight_matrix)/
+                                            dynam_pred_weight_matrix)/param$Groups$FeedWidth[i])^2)/
+        sqrt(2*pi*param$Groups$FeedWidth[i]^2)
+
+      # The feeding kernal of filter feeders is not expected to change much with increasing size so we fix it here
+
+      # if (param$fixed_filterPPMR == TRUE){
+        if(i == 3){
+          phyto_predkernel[i,,] <- matrix(phyto_predkernel[i,44,], nrow = param$ngrid, ncol = param$ngridPP, byrow = TRUE)
+          dynam_predkernel[i,,] <- matrix(dynam_predkernel[i,44,], nrow = param$ngrid, ncol = param$ngrid, byrow = TRUE)
+        }
+        if(i == 8){
+          phyto_predkernel[i,,] <- matrix(phyto_predkernel[i,61,], nrow = param$ngrid, ncol = param$ngridPP, byrow = TRUE)
+          dynam_predkernel[i,,] <- matrix(dynam_predkernel[i,61,], nrow = param$ngrid, ncol = param$ngrid, byrow = TRUE)
+        }
+      # }
+
+    } else { # If group does not have an m-value (fish)
+      beta_mat_phyto <- matrix(param$Groups$PPMR[i], nrow = param$ngrid, ncol = param$ngridPP)
+      beta_mat_dynam <- matrix(param$Groups$PPMR[i], nrow = param$ngrid, ncol = param$ngrid)
+
+      # Calculate feeding kernels
+      phyto_predkernel[i,,] <- exp(-0.5*(log((beta_mat_phyto*phyto_prey_weight_matrix)/
+                                            phyto_pred_weight_matrix)/param$Groups$FeedWidth[i])^2)/
+        sqrt(2*pi*param$Groups$FeedWidth[i]^2)
+      dynam_predkernel[i,,] <- exp(-0.5*(log((beta_mat_dynam*dynam_prey_weight_matrix)/
+                                            dynam_pred_weight_matrix)/param$Groups$FeedWidth[i])^2)/
+        sqrt(2*pi*param$Groups$FeedWidth[i]^2)
+      
+    }
+    
+}
+
+  zoomizerpredkernel <- getPredKernel(zoomizertest@params)
+  dim(zoomizerpredkernel)
+#all.equal(sp_dynam_predkernel[7,,],zoomizerpredkernel[7,,(216-178+1):216], check.attributes=FALSE) # different dimensions - how to compare?
+  
+wmax_phyto <- dim(phyto_predkernel)[3]
+dim(zoomizerpredkernel)
+
+#sanity check: zoomss phyto and dynamic spectrum feeding kernels all equal:
+all.equal(phyto_predkernel[,,39:wmax_phyto],dynam_predkernel[,,1:(wmax_phyto-39+1)])
+
+#comparing phytoplankton predation kernels
+all.equal(phyto_predkernel[,,], zoomizerpredkernel[,,1:wmax_phyto], check.attributes = FALSE) #TRUE  
+
+all.equal(phyto_predkernel[1,,], zoomizerpredkernel[1,,1:wmax_phyto], check.attributes=FALSE)   #TRUE  Flagellates 
+all.equal(phyto_predkernel[2,,], zoomizerpredkernel[2,,1:wmax_phyto], check.attributes=FALSE)   #TRUE  Ciliates    
+all.equal(phyto_predkernel[3,,], zoomizerpredkernel[3,,1:wmax_phyto], check.attributes=FALSE)   #TRUE  Larvaceans  
+all.equal(phyto_predkernel[4,,], zoomizerpredkernel[4,,1:wmax_phyto], check.attributes=FALSE)   #TRUE  OmniCopepods
+all.equal(phyto_predkernel[5,,], zoomizerpredkernel[5,,1:wmax_phyto], check.attributes=FALSE)   #TRUE  CarnCopepods
+all.equal(phyto_predkernel[6,,], zoomizerpredkernel[6,,1:wmax_phyto], check.attributes=FALSE)   #TRUE  Euphausiids
+all.equal(phyto_predkernel[7,,], zoomizerpredkernel[7,,1:wmax_phyto], check.attributes=FALSE)   #TRUE  Chaetognaths
+all.equal(phyto_predkernel[8,,], zoomizerpredkernel[8,,1:wmax_phyto], check.attributes=FALSE)   #TRUE  Salps
+all.equal(phyto_predkernel[9,,], zoomizerpredkernel[9,,1:wmax_phyto], check.attributes=FALSE)   #TRUE  Jellyfish
+all.equal(phyto_predkernel[10,,], zoomizerpredkernel[10,,1:wmax_phyto], check.attributes=FALSE) #TRUE  Fish_Small
+all.equal(phyto_predkernel[11,,], zoomizerpredkernel[11,,1:wmax_phyto], check.attributes=FALSE) #TRUE  Fish_Med
+all.equal(phyto_predkernel[12,,], zoomizerpredkernel[12,,1:wmax_phyto], check.attributes=FALSE) #TRUE  Fish_Large
+
+#comparing zoo/fish predation kernels
+dim(dynam_predkernel)
+all.equal(dynam_predkernel[,,], zoomizerpredkernel[,,39:216], check.attributes = FALSE)
+
+all.equal(dynam_predkernel[1,,], zoomizerpredkernel[1,,39:216], check.attributes=FALSE)   #TRUE  Flagellates 
+all.equal(dynam_predkernel[2,,], zoomizerpredkernel[2,,39:216], check.attributes=FALSE)   #TRUE  Ciliates
+all.equal(dynam_predkernel[3,,], zoomizerpredkernel[3,,39:216], check.attributes=FALSE)   #TRUE  Larvaceans  
+all.equal(dynam_predkernel[4,,], zoomizerpredkernel[4,,39:216], check.attributes=FALSE)   #TRUE  OmniCopepods
+all.equal(dynam_predkernel[5,,], zoomizerpredkernel[5,,39:216], check.attributes=FALSE)   #TRUE  CarnCopepods
+all.equal(dynam_predkernel[6,,], zoomizerpredkernel[6,,39:216], check.attributes=FALSE)   #TRUE  Euphausiids
+all.equal(dynam_predkernel[7,,], zoomizerpredkernel[7,,39:216], check.attributes=FALSE)   #TRUE  Chaetognaths
+all.equal(dynam_predkernel[8,,], zoomizerpredkernel[8,,39:216], check.attributes=FALSE)   #TRUE  Salps
+all.equal(dynam_predkernel[9,,], zoomizerpredkernel[9,,39:216], check.attributes=FALSE)   #TRUE  Jellyfish
+all.equal(dynam_predkernel[10,,], zoomizerpredkernel[10,,39:216], check.attributes=FALSE) #TRUE  Fish_Small
+all.equal(dynam_predkernel[11,,], zoomizerpredkernel[11,,39:216], check.attributes=FALSE) #TRUE  Fish_Med
+all.equal(dynam_predkernel[12,,], zoomizerpredkernel[12,,39:216], check.attributes=FALSE) #TRUE  Fish_Large
+
+
+```
+
+Ingested prey:
+
+```{r}
+zoomizerdiet <- getDiet(zoomizertest@params, proportion = FALSE) 
+  #zoomssgrid[[1]]
+dim(zoomizerdiet)
+
+# dimnames(zoomizerdiet)
+# zoomizerdiet[,,13] #rowSums(sweep(params@pred_kernel, 3, params@dw_full * params@w_full * n_pp, "*"), dims = 2)
+dim(zoomsstest$model$phyto_dietkernel)
+  
+all.equal(zoomsstest$model$phyto_dietkernel[1,2,1],zoomsstest$model$phyto_dietkernel[1,2,2]) #sanity check
+
+#phyto ingestion
+#model$temp_eff*(rowSums(sweep(model$phyto_growthkernel, 3, model$nPP, "*"), dims = 2))
+all.equal(zoomizerdiet[,,13], zoomsstest$model$ingested_phyto, check.attributes = FALSE)
+
+```
+
+
+## Growth integrals
+
+It looks like the difference may be in the different methods being used: ZooMSS does its numerical integration over log(weight) unlike Mizer, which does it over absolute weight. The conversion for this is given by arrays `dynam_growthkernel` and `phyto_growthkernel` and related helper arrays `gg_log_t_dynam` etc. These are what I will look at next...
+
+Here's the setup in ZooMSS:
+
+```{r}
+
+param <- zoomsstest$model$param
+model <- zoomsstest$model
+
+ngrps <- zoomsstest$model$param$ngrps
+ngrid <- zoomsstest$model$param$ngrid
+
+idx_iter <- 2:ngrid
+idx <- 2:(ngrid-1)
+  
+  # Matrices for MvF and MvF-D numeric solution
+  A_iter <- matrix(0, nrow = ngrps, ncol = ngrid)
+  C_iter <- matrix(0, nrow = ngrps, ncol = ngrid)
+  S_iter <- matrix(0, nrow = ngrps, ncol = ngrid)
+
+  A <- matrix(0, nrow = ngrps, ncol = ngrid)
+  B <- matrix(0, nrow = ngrps, ncol = ngrid)
+  C <- matrix(0, nrow = ngrps, ncol = ngrid)
+  S <- matrix(0, nrow = ngrps, ncol = ngrid)
+
+  # Temporary Matrices that get updated each time step some of these saved for output
+  N <- matrix(model$N[1,,], nrow = ngrps, ncol = ngrid) # Abundances of functional groups, dim 1 = groups, dim 2 = size classes
+
+    growth_multiplier <- colSums(N * model$assim_eff) # 1 x n_sizes
+    predation_multiplier <- N * model$temp_eff # n_species x n_sizes
+    diffusion_multiplier <- colSums(N * (model$assim_eff^2)) # 1 x n_sizes
+
+    ### DO GROWTH
+    dim(model$dynam_growthkernel) <- c(ngrps*ngrid, ngrid)
+    cs <- .colSums(growth_multiplier * t(model$dynam_growthkernel), m = ngrid, n = ngrps*ngrid)
+    dim(cs) <- c(ngrps, ngrid)
+    gg <- model$ingested_phyto + cs
+    gg_dynam <- cs
+
+    sw2 <- sweep(model$dynam_mortkernel, c(2,3), predation_multiplier, '*') # n_sizes x n_species x n_sizes
+    ap2 <- aperm(sw2, c(2,3,1))
+    M2 <- .colSums(colSums(ap2),ngrid,ngrid) # 1 x n_sizes
+    Z <- sweep(model$M_sb + model$fish_mort, 2, M2, '+') # Total dynamic spectrum mortality (n_species x n_sizes)
+    rm(sw2, ap2)
+
+    ### DO DIFFUSION
+    dim(model$dynam_diffkernel) <- c(ngrps*ngrid, ngrid)
+    cs <- .colSums(diffusion_multiplier * t(model$dynam_diffkernel), m = ngrid, n = ngrps*ngrid)
+    dim(cs) <- c(ngrps, ngrid)
+    diff <- (model$diff_phyto + cs)*0
+
+    # sw3 <- sweep(dynam_diffkernel, 3, diffusion_multiplier, '*')
+    # ap3 <- aperm(sw3, c(3,1,2))
+    # cs3 <- colSums(ap3)
+    # diff <- diff_phyto + cs3
+    # rm(sw3, ap3, cs3)
+
+    ### MvF WITH DIFFUSION ALGORITHM
+    # Numerical implementation matrices (for MvF without diffusion)
+    A_iter[,idx_iter] <- param$dt/param$dx * gg[,idx_iter-1] # Growth stuff
+    C_iter[,idx_iter] <- 1 + param$dt * Z[,idx_iter] + param$dt/param$dx * gg[,idx_iter] # Mortality
+    S_iter[,idx_iter] <- N[,idx_iter] # N at.....
+    N_iter <- N # Current Abundance
+    N_iter[1,1] <- N[1,1] # This forces R to make a copy of the variable. Otherwise N is linked to N_iter in the Rcpp code and they change together.
+
+    # # Numerical implementation matrices (for MvF WITH diffusion)
+    # A[,idx] <- param$dt/param$dx * (gg[,idx-1] + diff[,idx-1] * (log(10)/2+1/(2*param$dx))) # Growth stuff
+    # B[,idx] <- diff[,idx+1] * param$dt/(2*param$dx^2) # Diffusion term
+    # C[,idx] <- 1 + param$dt * Z[,idx] + param$dt/dx*(gg[,idx] + diff[,idx] * (log(10)/2+1/dx)) # Mortality
+    # S[,idx] <- N[,idx]
+    # 
+
+```
+
+
+Now, the equivalent in ZooMizer:
+
+```{r}
+
+params <- zoomizertest@params
+
+#dt <- 0.01
+
+n <- params@initial_n
+
+no_sp <- nrow(params@species_params) # number of species
+  no_w <- length(params@w) # number of fish size bins
+  idx <- 2:no_w
+  w_max_idx <- params@w_min_idx
+  for (i in 1:length(w_max_idx)) {
+    w_max_idx[i] <- which(round(log10(params@w),2)==round(log10(params@species_params$w_inf[i]),2))
+  }
+
+  # Hacky shortcut to access the correct element of a 2D array using 1D notation
+  # This references the egg size bracket for all species, so for example
+  # n[w_min_idx_array_ref] = n[,w_min_idx]
+  w_min_idx_array_ref <- (params@w_min_idx - 1) * no_sp + (1:no_sp)
+  # Matrices for solver
+  a <- matrix(0, nrow = no_sp, ncol = no_w)
+  b <- matrix(0, nrow = no_sp, ncol = no_w)
+  S <- matrix(0, nrow = no_sp, ncol = no_w)
+
+  encounter <- getEncounter(params)
+  
+  
+  e_growth <- new_EReproAndGrowth(params = params, n = params@initial_n, n_pp = params@initial_n_pp, n_other = params@initial_n_other, t = 0, encounter = getEncounter(params), feeding_level = getFeedingLevel(params))
+  mort <- getMort(params)
+    n_pp <- params@initial_n_pp
+    # Iterate species one time step forward:
+    # a_{ij} = - g_i(w_{j-1}) / dw_j dt
+    a[, idx] <- sweep(e_growth[, idx - 1, drop = FALSE] * dt, 2,
+                      params@w[idx-1], "/") * 10^(-0.1) / log(10)
+    # b_{ij} = 1 + g_i(w_j) / dw_j dt + \mu_i(w_j) dt
+    b[] <- 1 + sweep(e_growth * dt , 2, params@w, "/") /log(10) + mort * dt *0.1
+    # S_{ij} <- N_i(w_j)
+    S[,idx] <- n[, idx, drop = FALSE]
+
+    
+all.equal(e_growth, gg, check.attributes = FALSE)
+all.equal(sweep(a, 2, params@dw, "*"), A_iter, check.attributes = FALSE)
+all.equal(C_iter, b, check.attributes = FALSE)
+
+#just looking at the contribution from phyto ingestion:
+params2 <- params
+params2@initial_n <- params2@initial_n*0
+e_growth_phyto <- new_EReproAndGrowth(params = params, n = params@initial_n*0, n_pp = params@initial_n_pp, n_other = params@initial_n_other *0, t = 0, encounter = getEncounter(params), feeding_level = getFeedingLevel(params))
+a_phyto <- matrix(0, nrow = no_sp, ncol = no_w)
+a_phyto[, idx] <- sweep(e_growth_phyto[, idx - 1, drop = FALSE] * dt / 0.1, 2,
+                      params@dw[idx], "/")
+all.equal(sweep(a_phyto, 2, params@dw, "*")[, idx], param$dt/param$dx * model$ingested_phyto[, idx-1])
+
+# just the ingestion of zoo/fish:
+a_dynam <- a-a_phyto
+A_iter_dynam <- matrix(0, nrow = ngrps, ncol = ngrid)
+A_iter_dynam[,idx] <- param$dt/param$dx * gg_dynam[, idx-1]
+all.equal(a_dynam, A_iter_dynam, check.attributes = FALSE)
+
+```
+
+If you look at the relevant comparisons (`a` against `A` and `b` against `C`), it's apparent that the Mizer values are about 7 times too high. This might mean that something has been counted twice in the ZooMizer code?
+
+Note that `gg` in ZooMSS is mostly made up of the ingested phyto for small organisms. What is ingested phyto for ZooMizer?
+
+```{r}
+
+#ZooMSS
+
+
+#Zoomizer
+phi_prey_background <- params@other_params$assim_phyto * params@species_params$interaction_resource *
+    rowSums(sweep(
+      params@pred_kernel, 3, params@dw_full * params@w_full * n_pp,
+      "*", check.margin = FALSE), dims = 2)
+phyto_encounter <- params@other_params$temp_eff * params@search_vol * (phi_prey_background)
+
+#plug zoomss into zoomizer
+zoomssparams <- params
+zoomssparams@initial_n_pp[1:wmax_phyto] <- zoomsstest$model$nPP / params@dw_full[1:wmax_phyto]
+zoomssparams@initial_n[] <- sweep(zoomsstest$model$N[1,,], 2, params@dw, "/")
+#new_Encounter(params = zoomssparams, n = zoomssparams@initial_n, n_pp = zoomssparams@initial_n_pp, n_other = zoomssparams@initial_n_other, t=0)
+
+e_growth2 <- new_EReproAndGrowth(params = zoomssparams, n = zoomssparams@initial_n, n_pp = zoomssparams@initial_n_pp, n_other = zoomssparams@initial_n_other, t = 0, encounter = getEncounter(zoomssparams), feeding_level = getFeedingLevel(zoomssparams))
+
+all.equal(e_growth2, e_growth) #TRUE - so e_growth (mizer) and gg (ZooMSS) are being calculated differently...
+#all.equal(sweep(e_growth, 2, params@dw, "/"), gg/0.1, check.attributes = FALSE)
+
+#trying to recreate mizer encounter in ZooMSS
+all.equal(zoomsstest$model$phyto_growthkernel2, zoomizertest@params@pred_kernel[,,1:wmax_phyto], check.attributes = FALSE)
+
+
+all.equal(zoomsstest$model$phi_prey_background, phi_prey_background, check.attributes = FALSE)
+all.equal(phyto_encounter,zoomsstest$model$phyto_encounter, check.attributes = FALSE)
+
+```
+
+
+# Mortality
+
+Do the mortality rates agree?
+
+```{r}
+
+
+#senescence alone:
+# View(zoomsstest$model$M_sb)
+# View(zoomizertest@params@mu_b)
+all.equal(getExtMort(params)/10, zoomsstest$model$M_sb, check.attributes = FALSE) # 10 times higher - covered in the numerical step
+
+#predation mortality
+all.equal(getPredMort(zoomizertest@params)[1,]/10, M2, check.attributes = FALSE)
+
+#overall mortality
+all.equal(getMort(params)/10, Z, check.attributes = FALSE)
+
+```
+
+Run ZooMSS on Zoomizer initial values:
+
+```{r eval=FALSE, include=FALSE}
+curr_min_size <- vector()
+  curr_max_size <- vector()
+  for (i in 1:ngrps){
+    curr_min_size[i] <- which(round(log10(model$param$w), digits = 2) == param$Groups$W0[i])
+    curr_max_size[i] <- which(round(log10(model$param$w), digits = 2) == param$Groups$Wmax[i])
+  }
+
+idx_iter <- 2:ngrid
+  idx <- 2:(ngrid-1)
+A_iter[,idx_iter] <- dt/model$param$dx * getEGrowth(params)[,idx_iter-1] # Growth stuff
+    C_iter[,idx_iter] <- 1 + dt * getMort(params)[,idx_iter] + dt/model$param$dx * getEGrowth(params)[,idx_iter] # Mortality
+    S_iter[,idx_iter] <- (params@initial_n*params@dw)[,idx_iter] # N at.....
+    N_iter <- (params@initial_n*params@dw) # Current Abundance
+    N_iter[1,1] <- (params@initial_n*params@dw)[1,1] # This forces R to make a copy of the variable. Otherwise N is linked to N_iter in the Rcpp code and they change together.
+
+    # Numerical implementation matrices (for MvF WITH diffusion)
+    A[,idx] <- dt/model$param$dx * (getEGrowth(params)[,idx-1] + diff[,idx-1] * (log(10)/2+1/(2*model$param$dx))*0) # Growth stuff
+    B[,idx] <- diff[,idx+1] * dt/(2*model$param$dx^2)*0 # Diffusion term
+    C[,idx] <- 1 + dt * getMort(params)[,idx] + dt/model$param$dx*(getEGrowth(params)[,idx] + diff[,idx] * (log(10)/2+1/model$param$dx)*0) # Mortality
+    S[,idx] <- (params@initial_n*params@dw)[,idx]
+
+    # The original Base R code for the MvF equation
+    N2 <- fZooMSS_MvF_BaseR(ngrps, curr_min_size, curr_max_size,
+                            A_iter, C_iter, N_iter, S_iter,
+                            A, B, C, N, S)
+    
+View(N2 / model$N[2,,])
+    
+```
