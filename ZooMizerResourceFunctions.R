@@ -189,7 +189,7 @@ newZooMizerParams <- function(groups, input) {
 #' 
 #' @param params The MizerParams object describing the fish model
 #' @param n_other A list containing the current values of all other ecosystem
-#'   components. Only `n_other@zoo` will be needed by this function. It holds
+#'   components. Only `n_other$zoo` will be needed by this function. It holds
 #'   the array (type x size) with the current zooplankton abundances.
 #' @param rates A list of rate functions calculated by the fish model, see
 #'   [mizer::getRates()] for details. Probably only `` will
@@ -203,23 +203,27 @@ newZooMizerParams <- function(groups, input) {
 #'   time `t + dt`.
 zoo_dynamics <- function(params, n_other, rates, t, dt, ...) {
   # get the MizerParams object for the zooplankton
-  zoo_params <- other_params(params)$zoo
+  zoo_params <- params@other_params$zoo
   
   # get predation mortality imposed by the fish
   total_mort_from_fish <- rates$resource_mort
-  no_gps_in_size_class <- colSums(n_other@zoo > 1)
-  mort_from_fish <- matrix(total_mort_from_fish / no_gps_in_size_class, byrow = TRUE, nrow = nrow(params@species_params))
+  
+  zoo_idx <- (length(zoo_params$params@w_full) - length(zoo_params$params@w) + 1):length(zoo_params$params@w_full)
+  
+  no_gps_in_size_class <- colSums(n_other$zoo > 1)
+  
+  
+  mort_from_fish <- matrix(total_mort_from_fish[zoo_idx] / no_gps_in_size_class, byrow = TRUE, nrow = nrow(zoo_params$params@species_params), ncol = length(zoo_params$params@w))
+  
   
   # add mortality of fish eating zoo to the external mortality. Better if this was done as a fishing mortality?
-  zoo_params <- setExtMort(zoo_params, z0 = zoo_params@mu_b + mort_from_fish)
+  zoo_params$params@mu_b <- zoo_params$params@mu_b + mort_from_fish
 
-  
-    
   steps <- 10
   zoo_dt <- dt / steps
   
   # get array (type x size) with the current zooplankton abundances
-  n <- n_other@zoo
+  n <- n_other$zoo
   
   l <- new_project_simple(zoo_params, n = n, 
                           n_pp = zoo_params@initial_n_pp,
