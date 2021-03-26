@@ -304,13 +304,18 @@ fZooMizer_run <- function(groups, input){
   sst = input$sst
   dt = input$dt
   tmax = input$tmax
-
-  #data
+  
+    #data
   groups$w_min <- 10^groups$w_min #convert from log10 values
   groups$w_inf <- 10^groups$w_inf
   groups$w_mat <- 10^groups$w_mat
   groups$h <- 1e50 # should be Inf, but that breaks the calculations. Massive value still works out to effectively unlimited feeding as allowed in ZooMSS
   groups$ks <- 0 #turn off standard metabolism
+  if (is.null(groups$interaction_resource)) {
+    groups$interaction_resource <- 1
+    groups$interaction_resource[which(groups$FeedType == "Carnivore")] <- 0
+  }
+  
   #todo - ramp up constant repro for coexistence
 
   mf.params <- new_newMultispeciesParams(species_params=groups,
