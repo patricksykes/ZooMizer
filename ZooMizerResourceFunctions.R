@@ -130,7 +130,7 @@ newZooMizerParams <- function(groups, input, fish_params) {
   
   params <- new_newMultispeciesParams(species_params=groups,
                                          interaction=NULL, #NULL sets all to 1, no strict herbivores
-                                         min_w = 10^(-10.7),
+                                         #min_w = 10^(-10.7),
                                          #max_w = 10^7* (1 + 1e-06),
                                          #no_w = 178, #number of zoo+fish size classes;
                                          w_full = fish_params@w_full,
