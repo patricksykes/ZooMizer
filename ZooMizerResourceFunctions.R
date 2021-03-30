@@ -259,16 +259,16 @@ resource_zooMizer <- function(params, n_other, ...) {
   # phytoplankton abundances stay constant
   n_pp <- zoo_params@initial_n_pp
   # get array (type x size) with the current zooplankton abundances
-  # and aggregate over all types
-  n <- colSums(n_other$zoo)
+  # and aggregate over all types * carbon content
+  n_eff <- colSums(sweep(n_other$zoo, 1, zoo_params@species_params$Carbon * zoo_params@species_params$GrossGEscale, "*"))
   
   # TODO Patrick:
   # Now add n and n_pp and put it into a vector of the right length
   zoo_idx <- (length(zoo_params@w_full) - length(zoo_params@w) + 1):length(zoo_params@w_full)
-  total_n <- n_pp * 0 #NOTE: this means no fish feeding on phyto
-  total_n[zoo_idx] <- total_n[zoo_idx] + n 
+  total_n_eff <- n_pp * zoo_params@other_params$assim_phyto[1] *  0 #NOTE: this means no fish feeding on phyto
+  total_n_eff[zoo_idx] <- total_n_eff[zoo_idx] + n_eff
   
-  return(total_n)
+  return(total_n_eff)
 }
 
 phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa=params@resource_params$kappa, lambda=params@resource_params$lambda, ... ) {
