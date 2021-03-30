@@ -45,104 +45,40 @@ We now build the model:
 #                                      lambda = 1-input$phyto_slope
 #                                      )
 
+temp_eff <- 2.^((input$sst - 30)/10)
+
 fish_params <- newTraitParams(no_sp = 3,
                               min_w = 10^(-3),
                               min_w_inf = 10^3,
                               max_w_inf = 10^7,
                               min_w_pp = 10^(-14.5),
-                              kappa = 10^(input$phyto_int),
-                              lambda = 2.1,
-                              gamma = 640,
+                              alpha = 0.25 * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
+                              kappa = 10^(input$phyto_int) * 10^-5,
+                              lambda = 2.2, # 1 - input$phyto_slope,
+                              gamma = 640 * temp_eff, #takes care of temp effect on PredRate
                               ext_mort_prop = 0.1
                               # knife_edge_size = 10^3  # min size for fishing
                               )
 
-#fish_params@species_params$gamma <- 640
-#fish_params <- setSearchVolume(fish_params)
+fish_params@species_params$gamma <- 640 * temp_eff
+fish_params <- setSearchVolume(fish_params)
 
 zoo_params <- newZooMizerParams(groups = groups, input = input, fish_params = fish_params)
 
-
-fish_params <- fish_params %>% 
+fish_params <- fish_params %>%
     setComponent(component = "zoo",
                  initial_value = zoo_params@initial_n,
                  dynamics_fun = "zoo_dynamics",
                  component_params = list(params = zoo_params)
-                 ) %>% 
+                 ) %>%
     setResource(resource_dynamics = "resource_zooMizer")
 
 initialNResource(fish_params) <- resource_zooMizer(fish_params, fish_params@initial_n_other)
 
-fish_params@other_params$assim_eff <- 0.1 * 2.5  #10% carbon * 2.5 GGE scaling factor
-fish_params@other_params$temp_eff <- 2.^((input$sst - 30)/10)
-
-new_fish_Encounter <- function (params, n, n_pp, n_other, t, ...) 
-{
-    idx_sp <- (length(params@w_full) - length(params@w) + 1):length(params@w_full)
-    assim_prey <- params@other_params$assim_eff * params@interaction
-    if (length(params@ft_pred_kernel_e) == 1) {
-        n_eff_prey <- sweep(assim_prey %*% n, 2,
-                      params@w * params@dw, "*", check.margin = FALSE)
-        phi_prey_species <- rowSums(sweep(params@pred_kernel[, 
-            , idx_sp, drop = FALSE], c(1, 3), n_eff_prey, "*", 
-            check.margin = FALSE), dims = 2)
-        phi_prey_background <- params@species_params$interaction_resource * 
-            rowSums(sweep(params@pred_kernel, 3, params@dw_full * 
-                params@w_full * n_pp, "*", check.margin = FALSE), 
-                dims = 2)
-        encounter <- params@search_vol * (phi_prey_species + 
-            phi_prey_background)
-    }
-    else {
-        prey <- outer(params@species_params$interaction_resource, 
-            n_pp)
-        prey[, idx_sp] <- prey[, idx_sp] + assim_prey %*% 
-            n
-        prey <- sweep(prey, 2, params@w_full * params@dw_full, 
-            "*")
-        avail_energy <- Re(base::t(mvfft(base::t(params@ft_pred_kernel_e) * 
-            mvfft(base::t(prey)), inverse = TRUE)))/length(params@w_full)
-        avail_energy <- avail_energy[, idx_sp, drop = FALSE]
-        avail_energy[avail_energy < 1e-18] <- 0
-        encounter <- params@search_vol * avail_energy
-    }
-    for (i in seq_along(params@other_encounter)) {
-        encounter <- encounter + do.call(params@other_encounter[[i]], 
-            list(params = params, n = n, n_pp = n_pp, n_other = n_other, 
-                component = names(params@other_encounter)[[i]], 
-                ...))
-    }
-    return(encounter * params@other_params$temp_eff)
-}
-
-new_fish_PredRate <- function (params, n, n_pp, n_other, t, feeding_level, ...) 
-{
-    no_sp <- dim(params@interaction)[1]
-    no_w <- length(params@w)
-    no_w_full <- length(params@w_full)
-    if (length(params@ft_pred_kernel_p) == 1) {
-        n_total_in_size_bins <- sweep(n, 2, params@dw, "*", 
-            check.margin = FALSE)
-        pred_rate <- sweep(params@pred_kernel, c(1, 2), (1 - 
-            feeding_level) * params@search_vol * n_total_in_size_bins, 
-            "*", check.margin = FALSE)
-        pred_rate <- colSums(aperm(pred_rate, c(2, 1, 3)), dims = 1)
-        return(pred_rate * params@other_params$temp_eff)
-    }
-    idx_sp <- (no_w_full - no_w + 1):no_w_full
-    Q <- matrix(0, nrow = no_sp, ncol = no_w_full)
-    Q[, idx_sp] <- sweep((1 - feeding_level) * params@search_vol * 
-        n, 2, params@dw, "*")
-    pred_rate <- Re(t(mvfft(t(params@ft_pred_kernel_p) * mvfft(t(Q)), 
-        inverse = TRUE)))/no_w_full
-    pred_rate[pred_rate < 1e-18] <- 0
-    return(pred_rate * params@ft_mask * params@other_params$temp_eff)
-}
-
-fish_params <- setRateFunction(fish_params, "Encounter", "new_fish_Encounter")
-fish_params <- setRateFunction(fish_params, "PredRate", "new_fish_PredRate")
+plotSpectra(fish_params, wlim = c(10^-14.5, NA))
 
 ```
+
 
 And run it:
 
@@ -160,20 +96,37 @@ plot(sim)
 
 ```
 
-Tuning etc
+```{r animation}
+library(plotly)
+melt(N(sim)) %>% 
+    filter(value > 0) %>%
+    plot_ly() %>% 
+    add_lines(x = ~w, y = ~value, 
+              color = ~as.factor(sp), colors = getColours(sim@params),
+              frame = ~time,
+              line = list(simplify = FALSE)) %>% 
+    layout(xaxis = list(type = "log", exponentformat = "power"),
+           yaxis = list(type = "log", exponentformat = "power"))
+
+```
+
+The trait model sets up reproductive efficiencies based on power-law resource. But we're using ZooMizer as the resource, so we ought to retune the reproductive efficiency.
 
 ```{r}
 
-#steady_fish <-  steady(fish_params)
-tuned_erepro <- retune_erepro(fish_params) #NB this doesn't seem to do anything for the trait-based model
+steady_fish <-  steady(fish_params, t_max = 200, return_sim = TRUE, dt = 0.1, t_per = 5.5)
+plotBiomass(steady_fish)
+plotSpectra(steady_fish, time_range = 1)
 
-tuned_sim <- project(tuned_erepro, t_max = 5, dt = 0.1)
+tuned_erepro <- retune_erepro(steady_fish) #NB this doesn't seem to do anything for the trait-based model
+
+tuned_sim <- project(tuned_erepro, t_max = 10, dt = 0.1)
 
 ```
 
 ```{r plots}
-plotSpectra(sim, wlim = c(tuned_sim@params@w_full[1], 1000))
-plotSpectra(tuned_sim, wlim = c(tuned_sim@params@w_full[1], 1000))
+plotSpectra(sim, wlim = c(tuned_sim@params@w_full[1], 1000))+labs(title = "Untuned model")
+plotSpectra(tuned_sim, wlim = c(tuned_sim@params@w_full[1], 1000))+labs(title="tuned model")
 
 ```
 
@@ -190,5 +143,81 @@ zoomizer_plot@n_pp <- zoomizer_plot@n_pp*0
 library(patchwork)
 
 (p <- standard_plot / fish_plot)
+
+```
+
+
+```{r}
+
+
+# 
+# fish_params@other_params$assim_eff <- 0.1 * 2.5  #10% carbon * 2.5 GGE scaling factor
+# fish_params@other_params$temp_eff <- 2.^((input$sst - 30)/10)
+# 
+# new_fish_Encounter <- function (params, n, n_pp, n_other, t, ...) 
+# {
+#     idx_sp <- (length(params@w_full) - length(params@w) + 1):length(params@w_full)
+#     assim_prey <- params@other_params$assim_eff * params@interaction
+#     if (length(params@ft_pred_kernel_e) == 1) {
+#         n_eff_prey <- sweep(assim_prey %*% n, 2,
+#                       params@w * params@dw, "*", check.margin = FALSE)
+#         phi_prey_species <- rowSums(sweep(params@pred_kernel[, 
+#             , idx_sp, drop = FALSE], c(1, 3), n_eff_prey, "*", 
+#             check.margin = FALSE), dims = 2)
+#         phi_prey_background <- params@species_params$interaction_resource * 
+#             rowSums(sweep(params@pred_kernel, 3, params@dw_full * 
+#                 params@w_full * n_pp, "*", check.margin = FALSE), 
+#                 dims = 2)
+#         encounter <- params@search_vol * (phi_prey_species + 
+#             phi_prey_background)
+#     }
+#     else {
+#         prey <- outer(params@species_params$interaction_resource, 
+#             n_pp)
+#         prey[, idx_sp] <- prey[, idx_sp] + assim_prey %*% 
+#             n
+#         prey <- sweep(prey, 2, params@w_full * params@dw_full, 
+#             "*")
+#         avail_energy <- Re(base::t(mvfft(base::t(params@ft_pred_kernel_e) * 
+#             mvfft(base::t(prey)), inverse = TRUE)))/length(params@w_full)
+#         avail_energy <- avail_energy[, idx_sp, drop = FALSE]
+#         avail_energy[avail_energy < 1e-18] <- 0
+#         encounter <- params@search_vol * avail_energy
+#     }
+#     for (i in seq_along(params@other_encounter)) {
+#         encounter <- encounter + do.call(params@other_encounter[[i]], 
+#             list(params = params, n = n, n_pp = n_pp, n_other = n_other, 
+#                 component = names(params@other_encounter)[[i]], 
+#                 ...))
+#     }
+#     return(encounter * params@other_params$temp_eff)
+# }
+# 
+# new_fish_PredRate <- function (params, n, n_pp, n_other, t, feeding_level, ...) 
+# {
+#     no_sp <- dim(params@interaction)[1]
+#     no_w <- length(params@w)
+#     no_w_full <- length(params@w_full)
+#     if (length(params@ft_pred_kernel_p) == 1) {
+#         n_total_in_size_bins <- sweep(n, 2, params@dw, "*", 
+#             check.margin = FALSE)
+#         pred_rate <- sweep(params@pred_kernel, c(1, 2), (1 - 
+#             feeding_level) * params@search_vol * n_total_in_size_bins, 
+#             "*", check.margin = FALSE)
+#         pred_rate <- colSums(aperm(pred_rate, c(2, 1, 3)), dims = 1)
+#         return(pred_rate * params@other_params$temp_eff)
+#     }
+#     idx_sp <- (no_w_full - no_w + 1):no_w_full
+#     Q <- matrix(0, nrow = no_sp, ncol = no_w_full)
+#     Q[, idx_sp] <- sweep((1 - feeding_level) * params@search_vol * 
+#         n, 2, params@dw, "*")
+#     pred_rate <- Re(t(mvfft(t(params@ft_pred_kernel_p) * mvfft(t(Q)), 
+#         inverse = TRUE)))/no_w_full
+#     pred_rate[pred_rate < 1e-18] <- 0
+#     return(pred_rate * params@ft_mask * params@other_params$temp_eff)
+# }
+# 
+# fish_params <- setRateFunction(fish_params, "Encounter", "new_fish_Encounter")
+# fish_params <- setRateFunction(fish_params, "PredRate", "new_fish_PredRate")
 
 ```
