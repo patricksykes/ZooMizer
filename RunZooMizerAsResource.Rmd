@@ -47,17 +47,18 @@ We now build the model:
 
 temp_eff <- 2.^((input$sst - 30)/10)
 
-fish_params <- newTraitParams(no_sp = 3,
+fish_params <- newTraitParams(no_sp = 5,
                               min_w = 10^(-3),
                               min_w_inf = 10^3,
                               max_w_inf = 10^7,
                               min_w_pp = 10^(-14.5),
                               alpha = 0.25 * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
-                              kappa = 10^(input$phyto_int) * 10^-5,
+                              kappa = 10^(input$phyto_int) * 10^-2,
                               lambda = 2.2, # 1 - input$phyto_slope,
                               gamma = 640 * temp_eff, #takes care of temp effect on PredRate
-                              ext_mort_prop = 0.1
-                              # knife_edge_size = 10^3  # min size for fishing
+                              R_factor = 1.01,
+                              ext_mort_prop = 0.1,
+                              knife_edge_size = 10  # min size for fishing
                               )
 
 fish_params@species_params$gamma <- 640 * temp_eff
@@ -75,7 +76,11 @@ fish_params <- fish_params %>%
 
 initialNResource(fish_params) <- resource_zooMizer(fish_params, fish_params@initial_n_other)
 
-plotSpectra(fish_params, wlim = c(10^-14.5, NA))
+plotSpectra(fish_params, wlim = c(10^-14.5, NA), total = TRUE, power = 2)
+
+fish_params <- setParams(fish_params)
+
+getRDI(fish_params)
 
 ```
 
@@ -114,9 +119,9 @@ The trait model sets up reproductive efficiencies based on power-law resource. B
 
 ```{r}
 
-steady_fish <-  steady(fish_params, t_max = 200, return_sim = TRUE, dt = 0.1, t_per = 5.5)
+steady_fish <-  steady(fish_params, t_max = 200, return_sim = TRUE, dt = 0.1, t_per = 1.5)
 plotBiomass(steady_fish)
-plotSpectra(steady_fish, time_range = 1)
+plotSpectra(steady_fish)
 
 tuned_erepro <- retune_erepro(steady_fish) #NB this doesn't seem to do anything for the trait-based model
 
