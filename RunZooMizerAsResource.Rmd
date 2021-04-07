@@ -25,7 +25,7 @@ Now the data needed to run the model
 ```{r data}
 
 groups <- read.csv("data/TestGroups_mizer.csv") #load in ZooMSS groups
-groups <- groups[which(groups$Type == "Zooplankton"),] #just keep the zooplankton
+zoo_groups <- groups[which(groups$Type == "Zooplankton"),] #just keep the zooplankton
 
 ID <- 20  # pick a row to use of the environment data
 input <- readRDS("data/enviro_test20.RDS")[ID,]
@@ -74,7 +74,14 @@ fish_params <- fish_params %>%
                  ) %>%
     setResource(resource_dynamics = "resource_zooMizer")
 
-initialNResource(fish_params) <- resource_zooMizer(fish_params, fish_params@initial_n_other)
+# read in zooplankton at stable state for initial values
+#source("fZooMizer_run.R")
+#input$tmax <- 100
+#stable_zoo <- fZooMizer_run(groups = groups, input = input)
+
+#stable_zoo <- readRDS("test_grid_20210317.RDS")[[ID]] #needs to be the same w grid etc...
+
+initialNResource(fish_params) <- resource_zooMizer(fish_params, fish_params@initial_n_other) #TODO: set this to be stable state of a regular ZooMizer run
 
 plotSpectra(fish_params, wlim = c(10^-14.5, NA), total = TRUE, power = 2)
 
