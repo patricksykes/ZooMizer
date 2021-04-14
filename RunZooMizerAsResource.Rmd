@@ -80,7 +80,28 @@ fish_params <- fish_params %>%
 #stable_zoo <- fZooMizer_run(groups = groups, input = input)
 
 #stable_zoo <- readRDS("test_grid_20210317.RDS")[[ID]] #needs to be the same w grid etc...
+stable_zoo <- readRDS("zoomssgrid_redo_yearly.rds")[[ID]] #read in from ZooMSS (benefit of this method is that we can use the Matrix)
 
+new <- zoo_params@initial_n * 0
+
+w_mins <- zoo_groups$w_min
+w_maxs <- zoo_groups$w_inf
+w_min_idx <- zoo_params@w_min_idx
+w_max_idx <- w_min_idx
+
+for (i in 1:length(w_max_idx)) {
+  w_max_idx[i] <- max(which(zoo_params@w <= zoo_params@species_params$w_inf[i]))
+}
+zoomizer_w <- seq(from = -10.7, to = 7, by = 0.1)
+
+for (i in 1:nrow(new)) {
+  new[i,w_min_idx[i]:(w_max_idx[i])] <- spline(zoomizer_w, y = stable_zoo[i,], method = "fmm",
+                                            xout = log10(zoo_params@w),
+                                            ties = mean
+                                            )$y[w_min_idx[i]:(w_max_idx[i])] / zoo_params@dw[w_min_idx[i]:(w_max_idx[i])]
+}
+
+fish_params@initial_n_other$zoo <- new
 initialNResource(fish_params) <- resource_zooMizer(fish_params, fish_params@initial_n_other) #TODO: set this to be stable state of a regular ZooMizer run
 
 plotSpectra(fish_params, wlim = c(10^-14.5, NA), total = TRUE, power = 2)
