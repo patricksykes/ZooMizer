@@ -53,7 +53,7 @@ fish_params <- newTraitParams(no_sp = 5,
                               max_w_inf = 10^7,
                               min_w_pp = 10^(-14.5),
                               alpha = 0.25 * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
-                              kappa = 10^(input$phyto_int) * 10^-2,
+                              kappa = 10^(input$phyto_int) * 10^-1,
                               lambda = 2.2, # 1 - input$phyto_slope,
                               gamma = 640 * temp_eff, #takes care of temp effect on PredRate
                               R_factor = 1.01,
@@ -64,7 +64,7 @@ fish_params <- newTraitParams(no_sp = 5,
 fish_params@species_params$gamma <- 640 * temp_eff
 fish_params <- setSearchVolume(fish_params)
 
-zoo_params <- newZooMizerParams(groups = groups, input = input, fish_params = fish_params)
+zoo_params <- newZooMizerParams(groups = zoo_groups, input = input, fish_params = fish_params)
 
 fish_params <- fish_params %>%
     setComponent(component = "zoo",
@@ -80,6 +80,7 @@ fish_params <- fish_params %>%
 #stable_zoo <- fZooMizer_run(groups = groups, input = input)
 
 #stable_zoo <- readRDS("test_grid_20210317.RDS")[[ID]] #needs to be the same w grid etc...
+
 stable_zoo <- readRDS("zoomssgrid_redo_yearly.rds")[[ID]] #read in from ZooMSS (benefit of this method is that we can use the Matrix)
 
 new <- zoo_params@initial_n * 0

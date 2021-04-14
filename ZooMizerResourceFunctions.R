@@ -205,7 +205,7 @@ zoo_dynamics <- function(params, n_other, rates, t, dt, ...) {
   # get the MizerParams object for the zooplankton
   zoo_params <- params@other_params$zoo$params
   
-  # get predation mortality imposed by the fish
+  # get predation mortality imposed by the fish - note that this is scaled by carbon content and must be rescaled
   total_mort_from_fish <- rates$resource_mort
   
   zoo_idx <- (length(zoo_params@w_full) - length(zoo_params@w) + 1):length(zoo_params@w_full)
@@ -214,8 +214,12 @@ zoo_dynamics <- function(params, n_other, rates, t, dt, ...) {
   no_grps_in_size_class[which(no_grps_in_size_class == 0)] <- 1
   if(any(no_grps_in_size_class == 0)) {stop("NaNs produced by mort / # of groups") }
   
-  mort_from_fish <- matrix(total_mort_from_fish[zoo_idx] / no_grps_in_size_class, byrow = TRUE, nrow = nrow(zoo_params@species_params), ncol = length(zoo_params@w))
+  n_eff <- colSums(sweep(n_other$zoo, 1, 
+                         zoo_params@species_params$Carbon * zoo_params@species_params$GrossGEscale, 
+                         "*")) / params@species_params$alpha[1]
   
+  scaling <- sapply(as.data.frame(rbind(colSums(n_other$zoo) / n_eff, 0)), max, na.rm = TRUE) # re-scale by carbon content, set NAs to 0.
+  mort_from_fish <- matrix(total_mort_from_fish[zoo_idx] / no_grps_in_size_class * scaling, byrow = TRUE, nrow = nrow(zoo_params@species_params), ncol = length(zoo_params@w))
   
   # add mortality of fish eating zoo to the external mortality. Better if this was done as a fishing mortality?
   zoo_params@mu_b <- zoo_params@mu_b + mort_from_fish
