@@ -27,7 +27,7 @@ Now the data needed to run the model
 groups <- read.csv("data/TestGroups_mizer.csv") #load in ZooMSS groups
 zoo_groups <- groups[which(groups$Type == "Zooplankton"),] #just keep the zooplankton
 
-ID <- 20  # pick a row to use of the environment data
+ID <- 1  # pick a row to use of the environment data
 input <- readRDS("data/enviro_test20.RDS")[ID,]
 
 ```
@@ -75,13 +75,14 @@ fish_params <- fish_params %>%
     setResource(resource_dynamics = "resource_zooMizer")
 
 # read in zooplankton at stable state for initial values
-#source("fZooMizer_run.R")
-#input$tmax <- 100
-#stable_zoo <- fZooMizer_run(groups = groups, input = input)
 
-#stable_zoo <- readRDS("test_grid_20210317.RDS")[[ID]] #needs to be the same w grid etc...
+## FROM ZOOMSS
+# stable_zoo <- readRDS("zoomssgrid_redo_yearly.rds")[[ID]] #read in from ZooMSS (benefit of this method is that we can use the Matrix)
 
-stable_zoo <- readRDS("zoomssgrid_redo_yearly.rds")[[ID]] #read in from ZooMSS (benefit of this method is that we can use the Matrix)
+## FROM ZOOMIZER
+stable_zoo <- readRDS("test_grid_20210317.RDS")[[ID]]
+times <- length(getTimes(stable_zoo))
+stable_zoo <- colSums(stable_zoo@n[ceiling(times/2):times,,])
 
 new <- zoo_params@initial_n * 0
 
@@ -99,7 +100,9 @@ for (i in 1:nrow(new)) {
   new[i,w_min_idx[i]:(w_max_idx[i])] <- spline(zoomizer_w, y = stable_zoo[i,], method = "fmm",
                                             xout = log10(zoo_params@w),
                                             ties = mean
-                                            )$y[w_min_idx[i]:(w_max_idx[i])] / zoo_params@dw[w_min_idx[i]:(w_max_idx[i])]
+                                            )$y[w_min_idx[i]:(w_max_idx[i])] 
+  # only include this line if importing from ZooMSS
+  # new[i, ] <- new[i, ] / zoo_params@dw
 }
 
 fish_params@initial_n_other$zoo <- new
