@@ -36,44 +36,6 @@ We now build the model:
 
 ```{r setup_params}
 
-# fish_params <- NS_params  # or any other mizer params object
-# fish_params <- newMultispeciesParams(species_params = NS_species_params,
-#                                      interaction = inter,
-#                                      min_w_pp = 10^(-14.5),
-#                                      #gear_params = NS_species_params_gears
-#                                      kappa = 10^(input$phyto_int),
-#                                      lambda = 1-input$phyto_slope
-#                                      )
-
-temp_eff <- 2.^((input$sst - 30)/10)
-
-fish_params <- newTraitParams(no_sp = 5,
-                              min_w = 10^(-3),
-                              min_w_inf = 10^3,
-                              max_w_inf = 10^7,
-                              min_w_pp = 10^(-14.5),
-                              alpha = 0.25 * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
-                              kappa = 10^(input$phyto_int) * 10^-1,
-                              lambda = 2.2, # 1 - input$phyto_slope,
-                              gamma = 640 * temp_eff, #takes care of temp effect on PredRate
-                              R_factor = 1.01,
-                              ext_mort_prop = 0.1,
-                              knife_edge_size = 10  # min size for fishing
-                              )
-
-fish_params@species_params$gamma <- 640 * temp_eff
-fish_params <- setSearchVolume(fish_params)
-
-zoo_params <- newZooMizerParams(groups = zoo_groups, input = input, fish_params = fish_params)
-
-fish_params <- fish_params %>%
-    setComponent(component = "zoo",
-                 initial_value = zoo_params@initial_n,
-                 dynamics_fun = "zoo_dynamics",
-                 component_params = list(params = zoo_params)
-                 ) %>%
-    setResource(resource_dynamics = "resource_zooMizer")
-
 # read in zooplankton at stable state for initial values
 
 ## FROM ZOOMSS
@@ -81,6 +43,10 @@ fish_params <- fish_params %>%
 
 ## FROM ZOOMIZER
 stable_zoo <- readRDS("test_grid_20210317.RDS")[[ID]]
+
+intercept <- tail(getCommunitySlope(stable_zoo)$intercept,1)
+slope <- tail(getCommunitySlope(stable_zoo)$slope,1)
+
 times <- length(getTimes(stable_zoo))
 stable_zoo <- colSums(stable_zoo@n[ceiling(times/2):times,,])
 
@@ -105,7 +71,47 @@ for (i in 1:nrow(new)) {
   # new[i, ] <- new[i, ] / zoo_params@dw
 }
 
-fish_params@initial_n_other$zoo <- new
+
+# fish_params <- NS_params  # or any other mizer params object
+# fish_params <- newMultispeciesParams(species_params = NS_species_params,
+#                                      interaction = inter,
+#                                      min_w_pp = 10^(-14.5),
+#                                      #gear_params = NS_species_params_gears
+#                                      kappa = 10^(input$phyto_int),
+#                                      lambda = 1-input$phyto_slope
+#                                      )
+
+temp_eff <- 2.^((input$sst - 30)/10)
+
+fish_params <- newTraitParams(no_sp = 5,
+                              min_w = 10^(-3),
+                              min_w_inf = 10^3,
+                              max_w_inf = 10^7,
+                              min_w_pp = 10^(-14.5),
+                              alpha = 0.25 * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
+                              kappa = 10^intercept, #10^(input$phyto_int) * 10^-1,
+                              lambda = 1- slope, # 1 - input$phyto_slope,
+                              gamma = 640 * temp_eff, #takes care of temp effect on PredRate
+                              R_factor = 1.01,
+                              ext_mort_prop = 0.1,
+                              knife_edge_size = 10  # min size for fishing
+                              )
+
+fish_params@species_params$gamma <- 640 * temp_eff
+fish_params <- setSearchVolume(fish_params)
+
+zoo_params <- newZooMizerParams(groups = zoo_groups, input = input, fish_params = fish_params)
+
+zoo_params@initial_n <- new[1:9,]
+
+fish_params <- fish_params %>%
+    setComponent(component = "zoo",
+                 initial_value = zoo_params@initial_n,
+                 dynamics_fun = "zoo_dynamics",
+                 component_params = list(params = zoo_params)
+                 ) %>%
+    setResource(resource_dynamics = "resource_zooMizer")
+
 initialNResource(fish_params) <- resource_zooMizer(fish_params, fish_params@initial_n_other) #TODO: set this to be stable state of a regular ZooMizer run
 
 plotSpectra(fish_params, wlim = c(10^-14.5, NA), total = TRUE, power = 2)
@@ -120,7 +126,7 @@ getRDI(fish_params)
 And run it:
 
 ```{r run}
-tmax <- 100
+tmax <- 10
 sim <- project(fish_params, t_max = tmax, dt = 0.1)
 plot(sim)
 (fish_plot <- plotSpectra(sim,
