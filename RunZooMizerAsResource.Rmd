@@ -27,7 +27,7 @@ Now the data needed to run the model
 groups <- read.csv("data/TestGroups_mizer.csv") #load in ZooMSS groups
 zoo_groups <- groups[which(groups$Type == "Zooplankton"),] #just keep the zooplankton
 
-ID <- 1  # pick a row to use of the environment data
+ID <- 20  # pick a row to use of the environment data
 input <- readRDS("data/enviro_test20.RDS")[ID,]
 
 ```
@@ -42,40 +42,46 @@ We now build the model:
 # stable_zoo <- readRDS("zoomssgrid_redo_yearly.rds")[[ID]] #read in from ZooMSS (benefit of this method is that we can use the Matrix)
 
 ## FROM ZOOMIZER
-stable_zoo <- readRDS("test_grid_20210317.RDS")[[ID]]
+stable_zoomizer <- readRDS("test_grid_20210317.RDS")[[ID]]
 
-intercept <- mean(getCommunitySlope(stable_zoo, species = c("Fish_Small", "Fish_Med", "Fish_Large"), )$intercept[501:1000])
-slope <- mean(getCommunitySlope(stable_zoo, species = c("Fish_Small", "Fish_Med", "Fish_Large"))$slope[501:1000])
+intercept <- mean(getCommunitySlope(stable_zoomizer #,
+                                    #species = c("Fish_Small", "Fish_Med", "Fish_Large")
+                                    )$intercept[501:1000])
+slope <- mean(getCommunitySlope(stable_zoomizer #,
+                                #species = c("Fish_Small", "Fish_Med", "Fish_Large")
+                                )$slope[501:1000])
 
 f <- function(x) exp(intercept) * x^(slope)
-plotSpectra(stable_zoo, species = c("Fish_Small", "Fish_Med", "Fish_Large"))+geom_function(fun = f)
+g <- function(x) 10^input$phyto_int * x^(input$phyto_slope)
+plotSpectra(stable_zoomizer, species = c("Fish_Small", "Fish_Med", "Fish_Large"))+geom_function(fun = f)+geom_function(fun = g)
 
 
-times <- length(getTimes(stable_zoo))
-stable_zoo <- colSums(stable_zoo@n[ceiling(times/2):times,,])
+times <- length(getTimes(stable_zoomizer))
+stable_zoo <- colSums(stable_zoomizer@n[ceiling(times/2):times,,])
 
-new <- zoo_params@initial_n * 0
+# new <- zoo_params@initial_n * 0
+# 
+# w_mins <- zoo_groups$w_min
+# w_maxs <- zoo_groups$w_inf
+# w_min_idx <- zoo_params@w_min_idx
+# w_max_idx <- w_min_idx
+# 
+# for (i in 1:length(w_max_idx)) {
+#   w_max_idx[i] <- max(which(zoo_params@w <= zoo_params@species_params$w_inf[i]))
+# }
+# zoomizer_w <- seq(from = -10.7, to = 7, by = 0.1)
+# 
+# for (i in 1:nrow(new)) {
+#   new[i,w_min_idx[i]:(w_max_idx[i])] <- spline(zoomizer_w, y = stable_zoo[i,], # method = "fmm",
+#                                             xout = log10(zoo_params@w),
+#                                             ties = mean
+#                                             )$y[w_min_idx[i]:(w_max_idx[i])] 
+#   new[i,] <- apply(cbind(as.data.frame(new[i,]), 0), 1, max)
+#   # only include this line if importing from ZooMSS
+#   # new[i, ] <- new[i, ] / zoo_params@dw
+# }
 
-w_mins <- zoo_groups$w_min
-w_maxs <- zoo_groups$w_inf
-w_min_idx <- zoo_params@w_min_idx
-w_max_idx <- w_min_idx
-
-for (i in 1:length(w_max_idx)) {
-  w_max_idx[i] <- max(which(zoo_params@w <= zoo_params@species_params$w_inf[i]))
-}
-zoomizer_w <- seq(from = -10.7, to = 7, by = 0.1)
-
-for (i in 1:nrow(new)) {
-  new[i,w_min_idx[i]:(w_max_idx[i])] <- spline(zoomizer_w, y = stable_zoo[i,], # method = "fmm",
-                                            xout = log10(zoo_params@w),
-                                            ties = mean
-                                            )$y[w_min_idx[i]:(w_max_idx[i])] 
-  new[i,] <- apply(cbind(as.data.frame(new[i,]), 0), 1, max)
-  # only include this line if importing from ZooMSS
-  # new[i, ] <- new[i, ] / zoo_params@dw
-}
-
+new <- stable_zoo[which(groups$Type == "Zooplankton"),]
 
 # fish_params <- NS_params  # or any other mizer params object
 # fish_params <- newMultispeciesParams(species_params = NS_species_params,
@@ -88,14 +94,15 @@ for (i in 1:nrow(new)) {
 
 temp_eff <- 2.^((input$sst - 30)/10)
 
-fish_params <- newTraitParams(no_sp = 5,
+fish_params <- newTraitParams(no_sp = 3,
                               min_w = 10^(-3),
                               min_w_inf = 10^3,
                               max_w_inf = 10^7,
+                              no_w = (7-(-3))*10+1, # sets dx = 0.1 basically
                               min_w_pp = 10^(-14.5),
                               alpha = 0.25 * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
                               kappa = exp(intercept), #10^(input$phyto_int) * 10^-1,
-                              lambda = 1- slope, # 1 - input$phyto_slope,
+                              lambda = 1 - slope, # 1 - input$phyto_slope,
                               gamma = 640 * temp_eff, #takes care of temp effect on PredRate
                               R_factor = 1.01,
                               ext_mort_prop = 0.1,
@@ -117,9 +124,40 @@ fish_params <- fish_params %>%
                  ) %>%
     setResource(resource_dynamics = "resource_zooMizer")
 
+PredRate_temp <- function (params, n, n_pp, n_other, t, feeding_level, ...) 
+{
+  no_sp <- dim(params@interaction)[1]
+  no_w <- length(params@w)
+  no_w_full <- length(params@w_full)
+  if (length(params@ft_pred_kernel_p) == 1) {
+    n_total_in_size_bins <- sweep(n, 2, params@dw, "*", 
+      check.margin = FALSE)
+    pred_rate <- sweep(params@pred_kernel, c(1, 2), (1 - 
+      feeding_level) * params@search_vol * n_total_in_size_bins, 
+      "*", check.margin = FALSE)
+    pred_rate <- colSums(aperm(pred_rate, c(2, 1, 3)), dims = 1)
+    return(pred_rate * params@other_params$temp_eff)
+  }
+  idx_sp <- (no_w_full - no_w + 1):no_w_full
+  Q <- matrix(0, nrow = no_sp, ncol = no_w_full)
+  Q[, idx_sp] <- sweep((1 - feeding_level) * params@search_vol * 
+    n, 2, params@dw, "*")
+  pred_rate <- Re(t(mvfft(t(params@ft_pred_kernel_p) * mvfft(t(Q)), 
+    inverse = TRUE)))/no_w_full
+  pred_rate[pred_rate < 1e-18] <- 0
+  return(pred_rate * params@ft_mask * params@other_params$temp_eff)
+}
+
+fish_params <- setRateFunction(fish_params, "PredRate", "PredRate_temp")
+
+fish_params@other_params$temp_eff <- 2.^((input$sst - 30)/10)
+
 initialNResource(fish_params) <- resource_zooMizer(fish_params, fish_params@initial_n_other) #TODO: set this to be stable state of a regular ZooMizer run
 
 plotSpectra(fish_params, wlim = c(10^-14.5, NA), total = FALSE)
+
+
+
 
 fish_params <- setParams(fish_params)
 
