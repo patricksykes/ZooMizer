@@ -296,7 +296,7 @@ newFeedingLevel <- function (params, n, n_pp, n_other, t, encounter, ...)
   return(encounter * 0) #zero feeding level corresponds to type 1 feeding
 }
 
-fZooMizer_run <- function(groups, input){
+fZooMizer_run <- function(groups, input, no_w = 178){
 
   kappa = 10^(input$phyto_int)
   lambda = 1-input$phyto_slope
@@ -322,7 +322,7 @@ fZooMizer_run <- function(groups, input){
                                          interaction=NULL, #NULL sets all to 1, no strict herbivores
                                          min_w = 10^(-10.7),
                                          max_w = 10^7* (1 + 1e-06),
-                                         no_w = 178, #number of zoo+fish size classes;
+                                         no_w = no_w, #number of zoo+fish size classes;
                                          # w_full = 10^seq(from = -14.5, to = (log10(max(groups$w_inf)) + 0.1), by = 0.1),
                                          min_w_pp = 10^(-14.5), #minimum phyto size. Note: use -14.4, not -14.5, otherwise it makes an extra size class
                                          w_pp_cutoff = 10^(input$phyto_max)* (1 + 1e-06), #maximum phyto size
