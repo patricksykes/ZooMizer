@@ -27,7 +27,7 @@ Now the data needed to run the model
 groups <- read.csv("data/TestGroups_mizer.csv") #load in ZooMSS groups
 zoo_groups <- groups[which(groups$Type == "Zooplankton"),] #just keep the zooplankton
 
-ID <- 20  # pick a row to use of the environment data
+ID <- 18  # pick a row to use of the environment data
 input <- readRDS("data/enviro_test20.RDS")[ID,]
 
 ```
@@ -104,7 +104,7 @@ fish_params <- newTraitParams(no_sp = 3,
                               kappa = exp(intercept), #10^(input$phyto_int) * 10^-1,
                               lambda = 1 - slope, # 1 - input$phyto_slope,
                               gamma = 640 * temp_eff, #takes care of temp effect on PredRate
-                              R_factor = 1.01,
+                              R_factor = Inf,
                               ext_mort_prop = 0.1,
                               knife_edge_size = 10  # min size for fishing
                               )
@@ -184,15 +184,20 @@ plot(sim)
 
 ```{r animation}
 library(plotly)
-melt(N(sim)) %>% 
-    filter(value > 0) %>%
-    plot_ly() %>% 
-    add_lines(x = ~w, y = ~value, 
-              color = ~as.factor(sp), colors = getColours(sim@params),
-              frame = ~time,
-              line = list(simplify = FALSE)) %>% 
-    layout(xaxis = list(type = "log", exponentformat = "power"),
-           yaxis = list(type = "log", exponentformat = "power", range = c(-20, 1)))
+
+animateSpectra(sim, wlim = c(1e-10, 1e7), ylim = c(1e-450, NA))
+
+## old code no longer needed since the `animateSpectra` function is now included in Mizer...
+#
+# melt(N(sim)) %>% 
+#     filter(value > 0) %>%
+#     plot_ly() %>% 
+#     add_lines(x = ~w, y = ~value, 
+#               color = ~as.factor(sp), colors = getColours(sim@params),
+#               frame = ~time,
+#               line = list(simplify = FALSE)) %>% 
+#     layout(xaxis = list(type = "log", exponentformat = "power"),
+#            yaxis = list(type = "log", exponentformat = "power", range = c(-500, 10)))
 
 ```
 
@@ -200,7 +205,7 @@ The trait model sets up reproductive efficiencies based on power-law resource. B
 
 ```{r}
 
-steady_fish <-  steady(fish_params, t_max = 200, return_sim = TRUE, dt = 0.1, t_per = 1.5)
+steady_fish <-  steady(fish_params, return_sim = TRUE, dt = 0.1, t_per = 1.5, tol = 1)
 plotBiomass(steady_fish)
 plotSpectra(steady_fish)
 
