@@ -27,7 +27,7 @@ Now the data needed to run the model
 groups <- read.csv("data/TestGroups_mizer.csv") #load in ZooMSS groups
 zoo_groups <- groups[which(groups$Type == "Zooplankton"),] #just keep the zooplankton
 
-ID <- 18  # pick a row to use of the environment data
+ID <- 20  # pick a row to use of the environment data
 input <- readRDS("data/enviro_test20.RDS")[ID,]
 
 ```
@@ -44,20 +44,25 @@ We now build the model:
 ## FROM ZOOMIZER
 stable_zoomizer <- readRDS("test_grid_20210317.RDS")[[ID]]
 
-intercept <- mean(getCommunitySlope(stable_zoomizer #,
-                                    #species = c("Fish_Small", "Fish_Med", "Fish_Large")
+stable_zoo <- colSums(stable_zoomizer@n[ceiling(times/2):times,,])
+
+stable_zoomizer@n <- sweep(stable_zoomizer@n, 2, 2.5 * stable_zoomizer@params@species_params$Carbon, "*") #convert to carbon
+intercept <- mean(getCommunitySlope(stable_zoomizer,
+                                    species = stable_zoomizer@params@species_params$species[1:9],
+                                    max_w = 1e-1,
                                     )$intercept[501:1000])
-slope <- mean(getCommunitySlope(stable_zoomizer #,
-                                #species = c("Fish_Small", "Fish_Med", "Fish_Large")
-                                )$slope[501:1000])
+slope <- mean(getCommunitySlope(stable_zoomizer,
+                                    species = stable_zoomizer@params@species_params$species[1:9],
+                                    max_w = 1e-1,
+                                    )$slope[501:1000])
 
 f <- function(x) exp(intercept) * x^(slope)
 g <- function(x) 10^input$phyto_int * x^(input$phyto_slope)
-plotSpectra(stable_zoomizer, species = c("Fish_Small", "Fish_Med", "Fish_Large"))+geom_function(fun = f)+geom_function(fun = g)
+plotSpectra(stable_zoomizer)+geom_function(fun = f)+geom_function(fun = g)
 
 
 times <- length(getTimes(stable_zoomizer))
-stable_zoo <- colSums(stable_zoomizer@n[ceiling(times/2):times,,])
+
 
 # new <- zoo_params@initial_n * 0
 # 
@@ -103,14 +108,17 @@ fish_params <- newTraitParams(no_sp = 3,
                               alpha = 0.25 * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
                               kappa = exp(intercept), #10^(input$phyto_int) * 10^-1,
                               lambda = 1 - slope, # 1 - input$phyto_slope,
-                              gamma = 640 * temp_eff, #takes care of temp effect on PredRate
+                              # gamma = 640 * temp_eff, #takes care of temp effect on PredRate
+                              # f0 = 0.6,
+                              # h = 10^50,
                               R_factor = Inf,
+                              # ks = 0,
                               ext_mort_prop = 0.1,
                               knife_edge_size = 10  # min size for fishing
                               )
 
-fish_params@species_params$gamma <- 640 * temp_eff
-fish_params <- setSearchVolume(fish_params)
+# fish_params@species_params$gamma <- 640 * temp_eff
+# fish_params <- setSearchVolume(fish_params)
 
 zoo_params <- newZooMizerParams(groups = zoo_groups, input = input, fish_params = fish_params)
 

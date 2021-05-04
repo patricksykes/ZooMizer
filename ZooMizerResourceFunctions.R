@@ -212,6 +212,8 @@ zoo_dynamics <- function(params, n_other, rates, t, dt, ...) {
   
   no_grps_in_size_class <- colSums(n_other$zoo > 0)
   no_grps_in_size_class[which(no_grps_in_size_class == 0)] <- 1
+  no_grps_in_size_class[which(is.na(no_grps_in_size_class))] <- 1
+  
   if(any(no_grps_in_size_class == 0)) {stop("NaNs produced by mort / # of groups") }
   
   n_eff <- colSums(sweep(n_other$zoo, 1, 
