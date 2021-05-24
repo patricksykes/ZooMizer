@@ -27,7 +27,7 @@ Now the data needed to run the model
 groups <- read.csv("data/TestGroups_mizer.csv") #load in ZooMSS groups
 zoo_groups <- groups[which(groups$Type == "Zooplankton"),] #just keep the zooplankton
 
-ID <- 20  # pick a row to use of the environment data
+ID <- 11  # pick a row to use of the environment data
 input <- readRDS("data/enviro_test20.RDS")[ID,]
 
 ```
@@ -48,12 +48,12 @@ stable_zoo <- colSums(stable_zoomizer@n[ceiling(times/2):times,,])
 
 stable_zoomizer@n <- sweep(stable_zoomizer@n, 2, 2.5 * stable_zoomizer@params@species_params$Carbon, "*") #convert to carbon
 intercept <- mean(getCommunitySlope(stable_zoomizer,
-                                    species = stable_zoomizer@params@species_params$species[1:9],
-                                    max_w = 1e-1,
+                                    species = which(groups$Type == "Zooplankton"),
+                                    max_w = 1e-5,
                                     )$intercept[501:1000])
 slope <- mean(getCommunitySlope(stable_zoomizer,
-                                    species = stable_zoomizer@params@species_params$species[1:9],
-                                    max_w = 1e-1,
+                                    species = which(groups$Type == "Zooplankton"),
+                                    max_w = 1e-5,
                                     )$slope[501:1000])
 
 f <- function(x) exp(intercept) * x^(slope)
@@ -122,7 +122,7 @@ fish_params <- newTraitParams(no_sp = 3,
 
 zoo_params <- newZooMizerParams(groups = zoo_groups, input = input, fish_params = fish_params)
 
-zoo_params@initial_n <- new[1:9,]
+zoo_params@initial_n <- new[which(groups$Type == "Zooplankton"),]
 
 fish_params <- fish_params %>%
     setComponent(component = "zoo",
