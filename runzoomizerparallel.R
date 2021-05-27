@@ -30,15 +30,15 @@ ZooMizer_coupled <- function(ID, tmax = 25, effort = 0) {
                                 max_w_inf = 10^7,
                                 no_w = (7-(-3))*10+1, # sets dx = 0.1 basically
                                 min_w_pp = 10^(-14.5),
-                                alpha = 0.25 * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
+                                alpha = 0.25, # * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
                                 kappa = exp(intercept), #10^(input$phyto_int) * 10^-1,
                                 lambda = 1 - slope, # 1 - input$phyto_slope,
-                                # gamma = 640 * temp_eff, #takes care of temp effect on PredRate
+                                gamma = 4000 * temp_eff, #takes care of temp effect on PredRate and Encounter
                                 # f0 = 0.6,
                                 # h = 10^50,
-                                R_factor = 1.01,
-                                # ks = 0,
-                                ext_mort_prop = 0.1,
+                                R_factor = 1.01, #RMax = RFactor * RDI, default 4. Note RDI 
+                                ks = 0, #set metabolism to zero
+                                ext_mort_prop = 0, #currently zeroed since this is fitted. No need for temp effect here, calculates from PredMort
                                 knife_edge_size = 10  # min size for fishing
   )
   
@@ -105,13 +105,13 @@ clusterExport(cl, c("ZooMizer_coupled", "PredRate_temp"))
 
 
 
-sims5fisheffort05 <- foreach(ID = 1:20,
-                .packages = c("mizer", "assertthat", "tidyverse")
-                #.export = c("ZooMizer_coupled", "PredRate_temp")
-                ) %dopar% {
-                  source("ZooMizerResourceFunctions.R")
-                  ZooMizer_coupled(ID, tmax = 20, effort = 0.5)
-                }
+sims5gamma4000temp <- foreach(ID = 1:20,
+                                 .packages = c("mizer", "assertthat", "tidyverse")
+                                 #.export = c("ZooMizer_coupled", "PredRate_temp")
+) %dopar% {
+  source("ZooMizerResourceFunctions.R")
+  ZooMizer_coupled(ID, tmax = 15, effort = 0)
+}
 
 biomasses5fishgammadefault <- foreach(i=1:20) %dopar% sum(tail(getBiomass(sims5fishgammadefault[[i]]),1))
 
