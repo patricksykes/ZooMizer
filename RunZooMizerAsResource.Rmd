@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 Load in required libraries and functions:
 
 ```{r libraries}
-
+devtools::install_github("sizespectrum/mizer")
 library(mizer)
 library(tidyverse)
 library(assertthat)
