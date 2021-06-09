@@ -38,7 +38,7 @@ ZooMizer_coupled <- function(ID, tmax = 25, effort = 0) {
                                 alpha = 0.25, # * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
                                 kappa = exp(intercept), #10^(input$phyto_int) * 10^-1,
                                 lambda = 1 - slope, # 1 - input$phyto_slope,
-                                gamma = 640 * temp_eff, #takes care of temp effect on PredRate and Encounter
+                                gamma = 1280 * temp_eff, #takes care of temp effect on PredRate and Encounter
                                 # f0 = 0.6,
                                 # h = 10^50,
                                 R_factor = 1.01, #RMax = RFactor * RDI, default 4. Note RDI 
@@ -111,7 +111,7 @@ clusterExport(cl, c("ZooMizer_coupled", "PredRate_temp"))
 
 
 
-sims5gamma640temp <- foreach(ID = 1:20,
+sims5gamma1280temp <- foreach(ID = 1:20,
                                  .packages = c("mizer", "assertthat", "tidyverse")
                                  #.export = c("ZooMizer_coupled", "PredRate_temp")
 ) %dopar% {
@@ -119,7 +119,8 @@ sims5gamma640temp <- foreach(ID = 1:20,
   ZooMizer_coupled(ID, tmax = 100, effort = 0)
 }
 
-biomasses5gamma640temp <- foreach(i=1:20) %dopar% sum(colMeans(tail(getBiomass(sims5gamma640temp[[i]]),25)))
+biomasses5gamma1280temp <- foreach(i=1:20) %dopar% sum(colMeans(tail(getBiomass(sims5gamma1280temp[[i]]),25)))
+
 
 # plot(sim)
 # animateSpectra(sim)
