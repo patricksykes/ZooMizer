@@ -228,3 +228,78 @@ plotlySpectra_ZooMizer <- function(fish_object, zoo_object, species = NULL,
   argg <- as.list(environment())
   ggplotly(do.call("plotSpectra_ZooMizer", argg))
 }
+
+
+getBiomassFrame_ZooMizer <- function (sim, zoo_params, species = NULL, start_time = as.numeric(dimnames(sim@n)[[1]][1]), 
+          end_time = as.numeric(dimnames(sim@n)[[1]][dim(sim@n)[1]]), 
+          ylim = c(NA, NA), total = FALSE, ...) 
+{
+  species <- valid_species_arg(sim@params, species)
+  b <- getBiomass_ZooMizer(sim, zoo_params, ...)
+  if (start_time >= end_time) {
+    stop("start_time must be less than end_time")
+  }
+  b <- b[(as.numeric(dimnames(b)[[1]]) >= start_time) & (as.numeric(dimnames(b)[[1]]) <= 
+                                                           end_time), , drop = FALSE]
+  b_total <- rowSums(b)
+  if (total) {
+    b <- cbind(b, Total = b_total)
+    species <- c("Total", species)
+  }
+  bm <- reshape2::melt(b)
+  min_value <- 1e-20
+  bm <- bm[bm$value >= min_value & (is.na(ylim[1]) | bm$value >= 
+                                      ylim[1]) & (is.na(ylim[2]) | bm$value <= ylim[2]), ]
+  names(bm) <- c("Year", "Species", "Biomass")
+  species_levels <- c(zoo_params@species_params$species, dimnames(sim@n)$sp, "Background", 
+                      "Resource", "Total")
+  bm$Species <- factor(bm$Species, levels = species_levels)
+  # bm <- bm[bm$Species %in% species, ]
+  return(bm)
+}
+
+plotBiomass_ZooMizer <- function (sim, zoo_params, species = NULL, start_time, end_time, y_ticks = 6, 
+          ylim = c(NA, NA), total = FALSE, background = TRUE, highlight = NULL, 
+          ...) 
+{
+  species <- valid_species_arg(sim, species)
+  if (missing(start_time)) 
+    start_time <- as.numeric(dimnames(sim@n)[[1]][1])
+  if (missing(end_time)) 
+    end_time <- as.numeric(dimnames(sim@n)[[1]][dim(sim@n)[1]])
+  bm <- getBiomassFrame_ZooMizer(sim, zoo_params, species = dimnames(sim@n)$sp, 
+                        start_time = start_time, end_time = end_time, ylim = ylim, 
+                        total = total)#, ...)
+  spec_bm <- bm[bm$Species %in% c("Total", zoo_params@species_params$species, species), 
+  ]
+  x_label <- "Year"
+  y_label <- "Biomass [g]"
+  p <- ggplot(spec_bm, aes(x = Year, y = Biomass)) + scale_y_continuous(trans = "log10", 
+                                                                        breaks = mizer:::log_breaks(n = y_ticks), labels = prettyNum, 
+                                                                        name = y_label) + scale_x_continuous(name = x_label) #+ 
+    # scale_colour_manual(values = sim@params@linecolour) + 
+    # scale_linetype_manual(values = sim@params@linetype)
+  if (background) {
+    back_sp <- dimnames(sim@n)$sp[is.na(sim@params@A)]
+    back_bm <- bm[bm$Species %in% back_sp, ]
+    if (nrow(back_bm) > 0) {
+      p <- p + geom_line(aes(group = Species), data = back_bm, 
+                         colour = sim@params@linecolour["Background"], 
+                         linetype = sim@params@linetype["Background"])
+    }
+  }
+  linesize <- rep(0.8, length(sim@params@linetype))
+  names(linesize) <- names(sim@params@linetype)
+  linesize[highlight] <- 1.6
+  p <- p + #scale_size_manual(values = linesize)
+         geom_line(aes(colour = Species, linetype = Species)) #, size = Species))
+  return(p)
+}
+
+plotlyBiomass_ZooMizer <- function (sim, zoo_params, species = NULL, start_time, end_time, y_ticks = 6, 
+          ylim = c(NA, NA), total = FALSE, background = TRUE, highlight = NULL, 
+          ...) 
+{
+  argg <- c(as.list(environment()), list(...))
+  ggplotly(do.call("plotBiomass_ZooMizer", argg))
+}
