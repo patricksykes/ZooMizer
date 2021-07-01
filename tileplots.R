@@ -60,7 +60,8 @@ source("ZooMizerPlots.R")
 # problem here where fish#5 doesn't have the line shown...
 timeseries <- foreach(i = 1:24) %dopar% {
   plotBiomass_ZooMizer(sims[[i]], zoo_params)+
-    labs(title = paste0("Species biomass over time, SST = ", enviro$sst[i], ", chlo = ", enviro$chlo[i]))
+    labs(title = paste0("SST = ", enviro$sst[i], ", chlo = ", enviro$chlo[i]))
 }
 
-  
+library(patchwork)
+wrap_plots(timeseries, nrow =  6, ncol = 4) + plot_layout(guides = "collect")
