@@ -2,6 +2,11 @@
 # Patrick Sykes
 # 29 June 2021
 
+library(mizer)
+library(assertthat)
+library(tidyverse)
+
+
 today <- format(Sys.Date(), format = "%Y%m%d")
 
 sims <- read_rds("coupledmodel_24grid_20210628.RDS")
@@ -19,6 +24,11 @@ biom.df <- cbind(enviro, all_bioms) %>%
          fish4=`4`,
          fish5=`5`) %>% 
   mutate(AllFish = fish1 + fish2 + fish3 + fish4 +fish5)
+
+library(doParallel)
+cl <- makePSOCKcluster(max(1, detectCores()-1))     ## set up cores-1 machines
+registerDoParallel(cl, cores = (max(1, detectCores()-1)))
+clusterEvalQ(cl, lapply(c("mizer", "assertthat", "tidyverse"), require, character.only = TRUE)) %>% invisible()
 
 tiles <- foreach(i = 9:23) %dopar% {
   column <- sym(colnames(biom.df)[i])
@@ -43,5 +53,14 @@ ggsave(filename = paste0("phytovsfishslopes_",column,"_",today,".png"))
 ggplot(biom.df, aes(x = sst, y = fish_slope/phyto_slope))+
   geom_point(aes(colour = log10(chlo)))+
   geom_smooth()
-    
+
+source("ZooMizerPlots.R")
+
+
+# problem here where fish#5 doesn't have the line shown...
+timeseries <- foreach(i = 1:24) %dopar% {
+  plotBiomass_ZooMizer(sims[[i]], zoo_params)+
+    labs(title = paste0("Species biomass over time, SST = ", enviro$sst[i], ", chlo = ", enviro$chlo[i]))
+}
+
   

@@ -259,9 +259,10 @@ getBiomassFrame_ZooMizer <- function (sim, zoo_params, species = NULL, start_tim
 }
 
 plotBiomass_ZooMizer <- function (sim, zoo_params, species = NULL, start_time, end_time, y_ticks = 6, 
-          ylim = c(NA, NA), total = FALSE, background = TRUE, highlight = NULL, 
+          ylim = c(NA, NA), total = FALSE, background = FALSE, highlight = NULL, 
           ...) 
 {
+  browser()
   species <- valid_species_arg(sim, species)
   if (missing(start_time)) 
     start_time <- as.numeric(dimnames(sim@n)[[1]][1])
@@ -270,14 +271,19 @@ plotBiomass_ZooMizer <- function (sim, zoo_params, species = NULL, start_time, e
   bm <- getBiomassFrame_ZooMizer(sim, zoo_params, species = dimnames(sim@n)$sp, 
                         start_time = start_time, end_time = end_time, ylim = ylim, 
                         total = total)#, ...)
-  spec_bm <- bm[bm$Species %in% c("Total", zoo_params@species_params$species, species), 
-  ]
+  spec_bm <- bm[bm$Species %in% c("Total", zoo_params@species_params$species, species), ]
   x_label <- "Year"
   y_label <- "Biomass [g]"
-  p <- ggplot(spec_bm, aes(x = Year, y = Biomass)) + scale_y_continuous(trans = "log10", 
-                                                                        breaks = mizer:::log_breaks(n = y_ticks), labels = prettyNum, 
-                                                                        name = y_label) + scale_x_continuous(name = x_label) #+ 
-    # scale_colour_manual(values = sim@params@linecolour) + 
+  linecolours <- zoo_params@species_params$PlotColour
+  names(linecolours) <- zoo_params@species_params$species
+  linecolours <- c(linecolours, sim@params@linecolour)
+  p <- ggplot(spec_bm, aes(x = Year, y = Biomass)) +
+    scale_y_continuous(trans = "log10", 
+                       breaks = mizer:::log_breaks(n = y_ticks),
+                       labels = prettyNum, 
+                       name = y_label) +
+    scale_x_continuous(name = x_label) + 
+    scale_colour_manual(values = linecolours)
     # scale_linetype_manual(values = sim@params@linetype)
   if (background) {
     back_sp <- dimnames(sim@n)$sp[is.na(sim@params@A)]
@@ -291,8 +297,8 @@ plotBiomass_ZooMizer <- function (sim, zoo_params, species = NULL, start_time, e
   linesize <- rep(0.8, length(sim@params@linetype))
   names(linesize) <- names(sim@params@linetype)
   linesize[highlight] <- 1.6
-  p <- p + #scale_size_manual(values = linesize)
-         geom_line(aes(colour = Species, linetype = Species)) #, size = Species))
+  p <- p + # scale_size_manual(values = linesize) +
+         geom_line(aes(colour = Species)) #, linetype = Species)) #, size = Species))
   return(p)
 }
 
