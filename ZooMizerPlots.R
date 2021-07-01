@@ -175,14 +175,20 @@ plot_spectra_zoomizer <- function(fish_params, zoo_params, n, n_pp, n_zoo,
     ylim[1] <- 1e-20
   }
   plot_dat <- plot_dat[plot_dat$value > ylim[1], ]
+  
+  linecolours <- zoo_params@species_params$PlotColour
+  names(linecolours) <- zoo_params@species_params$species
+  linecolours <- c(linecolours, sim@params@linecolour)
+  
   # Create plot
+  
 
   p <- ggplot(plot_dat, aes(x = w, y = value)) +
     scale_x_continuous(name = "Size [g]", trans = "log10",
                        breaks = log_breaks()) +
     scale_y_continuous(name = y_label, trans = "log10",
                        breaks = log_breaks()) +
-    scale_colour_manual(values = c(zoo_params@linecolour[1:nrow(zoo_params@species_params)], fish_params@linecolour)) +
+    scale_colour_manual(values = linecolours) +
     scale_linetype_manual(values = c(zoo_params@linetype[1:nrow(zoo_params@species_params)], fish_params@linetype))
   if (background) {
     back_n <- n[is.na(fish_params@A), , drop = FALSE]
