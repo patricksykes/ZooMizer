@@ -11,7 +11,7 @@ library(assertthat)
 #job specifics
 Groups <- read.csv("data/TestGroups_mizer.csv") # Load in functional group information
 
-jobname <- '20200705_grid' #job name used on queue
+jobname <- '20210705_grid' #job name used on queue
 
 ID <- as.integer(Sys.getenv('PBS_ARRAY_INDEX'))
 ID_char <- sprintf("%04d",ID)

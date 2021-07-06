@@ -71,7 +71,7 @@ ZooMizer_coupled <- function(ID, tmax = 25, effort = 0) {
   
   plotSpectra(fish_params, wlim = c(10^-14.5, NA), total = FALSE)
 
-  initialN(fish_params) <- get_initial_n(fish_params)
+  initialN(fish_params) <- get_initial_n(fish_params)  # TODO: adjust n0_mult and a parameters
   fish_params <- setParams(fish_params)
   
 return(project(fish_params, t_max = tmax, dt = 0.1, effort = effort))
