@@ -264,6 +264,24 @@ getBiomassFrame_ZooMizer <- function (sim, zoo_params, species = NULL, start_tim
   return(bm)
 }
 
+#' Plot the biomass of species through time
+#'
+#' @param sim An object of class MizerSim contianing the fish model
+#' @param zoo_params An object of class MizerParams containing the zooplankton model
+#' @param species A list of fish species to include in the plot
+#' @param start_time 
+#' @param end_time 
+#' @param y_ticks The approximate number of ticks desired on the y axis
+#' @param ylim 
+#' @param total 
+#' @param background 
+#' @param highlight 
+#' @param ... 
+#'
+#' @return A ggplot2 object
+#' @export
+#'
+#' @examples
 plotBiomass_ZooMizer <- function (sim, zoo_params, species = NULL, start_time, end_time, y_ticks = 6, 
           ylim = c(NA, NA), total = FALSE, background = FALSE, highlight = NULL, 
           ...) 
@@ -343,7 +361,24 @@ getAbundanceFrame_ZooMizer <- function (sim, zoo_params, species = NULL, start_t
   return(bm)
 }
 
-
+#' Plot the abundance of species through time
+#'
+#' @param sim An object of class MizerSim contianing the fish model
+#' @param zoo_params An object of class MizerParams containing the zooplankton model
+#' @param species A list of fish species to include in the plot
+#' @param start_time 
+#' @param end_time 
+#' @param y_ticks The approximate number of ticks desired on the y axis
+#' @param ylim 
+#' @param total 
+#' @param background 
+#' @param highlight 
+#' @param ... 
+#'
+#' @return A ggplot2 object
+#' @export
+#'
+#' @examples
 plotAbundance_ZooMizer <- function (sim, zoo_params, species = NULL, start_time, end_time, y_ticks = 6, 
                                   ylim = c(NA, NA), total = FALSE, background = FALSE, highlight = NULL, 
                                   ...) 
