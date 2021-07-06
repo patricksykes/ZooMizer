@@ -33,7 +33,7 @@ phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa = 10^enviro$p
 }
 
 zoomss <- fZooMizer_run(groups = Groups, input = enviro)
-saveRDS(zoomss, file = paste0("Output/ZooMSS_", jobname, "_", ID_char,".RDS"))
+saveRDS(zoomss, file = paste0("Output/", jobname, "_ZooMSS_", ID_char,".RDS"))
 
 
 
