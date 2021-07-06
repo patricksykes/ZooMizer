@@ -26,7 +26,7 @@ enviro$tmax <- 1000
 assim_eff <- matrix(Groups$GrossGEscale * groups$Carbon, nrow = nrow(Groups), ncol = nrow(Groups))
 phyto_cc <- 0.1
 assim_phyto <- Groups$GrossGEscale * phyto_cc
-get_filterfeeders <- which(Groups$FeedType == "FilterFeeder")
+# get_filterfeeders <- which(Groups$FeedType == "FilterFeeder")
 
 # for (i in get_filterfeeders) {
 #   assim_eff[,i] <- assim_eff[,i] / Groups$Carbon[i]
