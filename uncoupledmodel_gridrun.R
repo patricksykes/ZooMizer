@@ -4,7 +4,7 @@ enviro <- fZooMSS_CalculatePhytoParam(enviro)
 enviro$dt <- 0.01
 enviro$tmax <- 1000
 
-source("fZooMizer_run.R")
+source("uncoupledmodel.R")
 
 require(mizer)
 require(tidyverse)
@@ -16,7 +16,7 @@ Groups <- read_csv("data/TestGroups_mizer.csv")
 library(doParallel)
 cl <- makePSOCKcluster(max(1, detectCores()-1))     ## set up cores-1 machines
 registerDoParallel(cl, cores = (max(1, detectCores()-1)))
-clusterEvalQ(cl, source("fZooMizer_run.R")) %>% invisible()
+clusterEvalQ(cl, source("uncoupledmodel.R")) %>% invisible()
 
 zoomssgrid <- list()
 

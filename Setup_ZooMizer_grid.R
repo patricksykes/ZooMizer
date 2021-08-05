@@ -19,7 +19,7 @@ ID_char <- sprintf("%04d",ID)
 # Choose environmental data to use
 enviro <- readRDS("data/enviro_grid20210705.RDS")[ID,]
 
-source("fZooMizer_run.R")
+source("uncoupledmodel.R")
 source("ZooMizerResourceFunctions.R")
 
 environment(new_project_simple) <- asNamespace('mizer') 
