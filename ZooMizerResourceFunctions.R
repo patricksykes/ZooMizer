@@ -91,7 +91,7 @@ setZooMizerConstants <- function(params, Groups, sst){
   
   #SearchVol <- readRDS("data/SearchVol.rds")
   
-  params <- setExtMort(params, z0 = M_sb)
+  params <- setExtMort(params, ext_mort = M_sb)
   params <- setSearchVolume(params, search_vol = SearchVol)
   params <- setPredKernel(params, pred_kernel)
   
@@ -502,7 +502,7 @@ new_newMultispeciesParams <- function(
   metab = NULL,
   p = 0.7,
   # setExtMort
-  z0 = NULL,
+  ext_mort = NULL, # z0 = NULL,
   z0pre = 0.6,
   z0exp = n - 1,
   # setReproduction
@@ -562,7 +562,7 @@ new_newMultispeciesParams <- function(
               # setMetabolicRate()
               metab = metab,
               # setExtMort
-              z0 = z0,
+              ext_mort = ext_mort,
               z0pre = z0pre,
               z0exp = z0exp,
               # setReproduction
@@ -777,6 +777,11 @@ new_emptyParams <- function(species_params,
   # Should Z0, rrPP and ccPP have names (species names etc)?
   params <- new(
     "MizerParams",
+    metadata = list(),
+    mizer_version = packageVersion("mizer"),
+    extensions = vector(mode = "character"),
+    time_created = lubridate::now(),
+    time_modified = lubridate::now(),
     w = w,
     dw = dw,
     w_full = w_full,
