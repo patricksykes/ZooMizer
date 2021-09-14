@@ -90,7 +90,7 @@ setZooMizerConstants <- function(params, Groups, sst){
   
   #SearchVol <- readRDS("data/SearchVol.rds")
   
-  params <- setExtMort(params, z0 = M_sb)
+  params <- setExtMort(params, ext_mort = M_sb)
   params <- setSearchVolume(params, search_vol = SearchVol)
   params <- setPredKernel(params, pred_kernel)
 
