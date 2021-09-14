@@ -65,7 +65,7 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   new <- stable_zoo[which(groups$Type == "Zooplankton"),]
   
   temp_eff <- 2.^((input$sst - 30)/10)
-  
+  R_factor = 1.01
   fish_params <- newTraitParams(no_sp = 5,
                                 min_w = 10^(-3),
                                 min_w_inf = 10^3,
@@ -78,7 +78,8 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
                                 gamma = 1280 * temp_eff, #takes care of temp effect on PredRate and Encounter
                                 # f0 = 0.6,
                                 # h = 10^50,
-                                R_factor = 1.01, #RMax = RFactor * RDI, default 4. Note RDI 
+                                # R_factor = 1.01, #RMax = RFactor * RDI, default 4. Note RDI 
+                                reproduction_level = 1/R_factor,
                                 ks = 0, #set metabolism to zero
                                 ext_mort_prop = 0, #currently zeroed since this is fitted. No need for temp effect here, calculates from PredMort
                                 knife_edge_size = 10  # min size for fishing
