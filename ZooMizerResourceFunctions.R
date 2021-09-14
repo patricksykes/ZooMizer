@@ -777,11 +777,6 @@ new_emptyParams <- function(species_params,
   # Should Z0, rrPP and ccPP have names (species names etc)?
   params <- new(
     "MizerParams",
-    metadata = list(),
-    mizer_version = packageVersion("mizer"),
-    extensions = vector(mode = "character"),
-    time_created = lubridate::now(),
-    time_modified = lubridate::now(),
     w = w,
     dw = dw,
     w_full = w_full,
