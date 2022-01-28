@@ -49,7 +49,7 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   stable_zoomizer <- readRDS(paste0("Output/", jobname, "_ZooMSS_", ID_char,".RDS"))
   
   times <- length(getTimes(stable_zoomizer))
-  stable_zoo <- colSums(stable_zoomizer@n[ceiling(times/2+1):times,,])
+  stable_zoo <- colMeans(stable_zoomizer@n[ceiling(times/2+1):times,,])
   
   stable_zoomizer@n <- sweep(stable_zoomizer@n, 2, 2.5 * stable_zoomizer@params@species_params$Carbon, "*") #convert to carbon
   intercept <- mean(getCommunitySlope(stable_zoomizer,
