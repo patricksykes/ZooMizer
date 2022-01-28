@@ -12,7 +12,7 @@ ZooMizer_coupled <- function(ID, tmax = 25, effort = 0) {
   stable_zoomizer <- readRDS("test_grid_20210317.RDS")[[ID]]
   
   times <- length(getTimes(stable_zoomizer))
-  stable_zoo <- colSums(stable_zoomizer@n[ceiling(times/2+1):times,,])
+  stable_zoo <- colMeans(stable_zoomizer@n[ceiling(times/2+1):times,,])
   
   stable_zoomizer@n <- sweep(stable_zoomizer@n, 2, 2.5 * stable_zoomizer@params@species_params$Carbon, "*") #convert to carbon
   intercept <- mean(getCommunitySlope(stable_zoomizer,
@@ -74,7 +74,7 @@ ZooMizer_coupled <- function(ID, tmax = 25, effort = 0) {
   initialN(fish_params) <- get_initial_n(fish_params)  # TODO: adjust n0_mult and a parameters
   fish_params <- setParams(fish_params)
   
-return(project(fish_params, t_max = tmax, dt = 0.1, effort = effort))
+return(project(fish_params, t_max = tmax, dt = 0.01, effort = effort))
 }  
 
 
