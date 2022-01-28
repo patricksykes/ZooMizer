@@ -32,7 +32,7 @@ phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa = 10^enviro$p
   return(npp)
 }
 
-zoomss <- fZooMizer_run(groups = Groups, input = enviro, no_w = 5*177+1) # dx=0.02
+zoomss <- fZooMizer_run(groups = Groups, input = enviro, no_w = 177+1) # dx=0.1
 saveRDS(zoomss, file = paste0("Output/", jobname, "_ZooMSS_", ID_char,".RDS"))
 
 
@@ -70,7 +70,7 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
                                 min_w = 10^(-3),
                                 min_w_inf = 10^3,
                                 max_w_inf = 10^7,
-                                no_w = 5*(7-(-3))*10+1, # sets dx = 0.02
+                                no_w = (7-(-3))*10+1, # sets dx = 0.1
                                 min_w_pp = 10^(-14.5),
                                 alpha = 0.25, # * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
                                 kappa = exp(intercept), #10^(input$phyto_int) * 10^-1,
