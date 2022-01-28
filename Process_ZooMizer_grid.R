@@ -7,15 +7,18 @@ library(tidyverse)
 library(assertthat)
 
 #job specifics
+jobname <- '20220118_alldt_pt01' #job name used on queue
+enviro <- readRDS("data/enviro_grid20.RDS")[1:20,]
+
 Groups <- read.csv("data/TestGroups_mizer.csv") # Load in functional group information
 zoo_groups <- Groups[1:9,]
-zoo_params <- newZooMizerParams(groups = zoo_groups, input = enviro[1,], fish_params = sims[[1]]@params)
+source("ZooMizerResourceFunctions.R")
+sim <- readRDS(paste0("Output/",jobname,"_ZooMizer_0001.RDS"))
+zoo_params <- newZooMizerParams(groups = zoo_groups, input = enviro[1,], fish_params = sim@params)
 
 
 
-jobname <- '20210705_grid' #job name used on queue
 
-enviro <- readRDS("data/enviro_grid20210705.RDS")
 
 
 library(doParallel)
@@ -45,17 +48,17 @@ tiles <- foreach(i = 11:25) %dopar% {
     geom_tile(aes(fill=log10(!!column)))+
     scale_fill_viridis_c()+
     labs(title = paste(colnames(biom.df)[i], "Biomass vs. SST and chlorophyll-a"))
-  ggsave(filename = paste0("tileplot_",column,"_biomass_20210705.png"))
+  ggsave(filename = paste0("tileplot_",column,"_biomass_20220120.png"))
 }
 
-df$totalzoobiom <- rowSums(biom.df[,13:19])
+totalzoobiom <- rowSums(biom.df[,13:19])
 tiles <- foreach(i = 13:19) %dopar% {
-  column <- sym(colnames(df)[i])
+  column <- sym(colnames(biom.df)[i])
   ggplot(biom.df, aes(x=sst, y = log10(chlo)))+
     geom_tile(aes(fill=(!!column)/totalzoobiom))+
     scale_fill_viridis_c()+
-    labs(title = paste(colnames(biom.df)[i], "Biomass vs. SST and chlorophyll-a"))
-  ggsave(filename = paste0("tileplot_",column,"_relbiom_20210705.png"))
+    labs(title = paste(colnames(biom.df)[i], "Relative Biomass vs. SST and chlorophyll-a"))
+  ggsave(filename = paste0("tileplot_",column,"_relbiom_20220120.png"))
 }
 
 abunds <- foreach(ID=1:nrow(enviro), .combine = rbind) %dopar% {
@@ -80,7 +83,7 @@ abundtiles <- foreach(i = 13:19) %dopar% {
   ggplot(abund.df, aes(x=sst, y = log10(chlo)))+
     geom_tile(aes(fill=(!!column)/totalzooabund))+
     scale_fill_viridis_c()+
-    labs(title = paste(colnames(abund.df)[i], "Biomass vs. SST and chlorophyll-a"))
+    labs(title = paste(colnames(abund.df)[i], "Relative abundance vs. SST and chlorophyll-a"))
   ggsave(filename = paste0("tileplot_",column,"_relabund_20210705.png"))
 }
 

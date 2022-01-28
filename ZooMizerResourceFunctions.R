@@ -67,7 +67,7 @@ setZooMizerConstants <- function(params, Groups, sst){
   # SearchVol[12,178] <- (params@species_params$gamma[12])*(params@w[178]^(params@species_params$q[12])) #adding last size class by hand
   
   #temperature effect
-  M_sb <- params@other_params$temp_eff * M_sb * 10 # Incorporate temp effect on senscence mortality
+  M_sb <- params@other_params$temp_eff * M_sb * 10 # Incorporate temp effect on senescence mortality
   
   
   params@initial_n_pp <- params@resource_params$kappa * params@w_full^(1 - params@resource_params$lambda)/params@dw_full
@@ -226,7 +226,7 @@ zoo_dynamics <- function(params, n_other, rates, t, dt, ...) {
   # add mortality of fish eating zoo to the external mortality. Better if this was done as a fishing mortality?
   zoo_params@mu_b <- zoo_params@mu_b + mort_from_fish
 
-  steps <- 10
+  steps <- 1  # Number of times to iterate zoo per fish iteration
   zoo_dt <- dt / steps
   
   # get array (type x size) with the current zooplankton abundances

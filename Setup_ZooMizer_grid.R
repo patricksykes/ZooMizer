@@ -2,7 +2,7 @@
 ##
 ## Adapted from Jason's ZooMSS code for UNSWs Katana
 ##
-## Updated Monday 5th of July, 2021
+## Updated Tuesday 4th of January 2022
 
 library(mizer)
 library(tidyverse)
@@ -11,7 +11,7 @@ library(assertthat)
 #job specifics
 Groups <- read.csv("data/TestGroups_mizer.csv") # Load in functional group information
 
-jobname <- '20210705_grid' #job name used on queue
+jobname <- '20220104_grid' #job name used on queue
 
 ID <- as.integer(Sys.getenv('PBS_ARRAY_INDEX'))
 ID_char <- sprintf("%04d",ID)
@@ -32,7 +32,7 @@ phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa = 10^enviro$p
   return(npp)
 }
 
-zoomss <- fZooMizer_run(groups = Groups, input = enviro)
+zoomss <- fZooMizer_run(groups = Groups, input = enviro, no_w = 177+1) # dx=0.1
 saveRDS(zoomss, file = paste0("Output/", jobname, "_ZooMSS_", ID_char,".RDS"))
 
 
@@ -49,7 +49,7 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   stable_zoomizer <- readRDS(paste0("Output/", jobname, "_ZooMSS_", ID_char,".RDS"))
   
   times <- length(getTimes(stable_zoomizer))
-  stable_zoo <- colSums(stable_zoomizer@n[ceiling(times/2+1):times,,])
+  stable_zoo <- colMeans(stable_zoomizer@n[ceiling(times/2+1):times,,])
   
   stable_zoomizer@n <- sweep(stable_zoomizer@n, 2, 2.5 * stable_zoomizer@params@species_params$Carbon, "*") #convert to carbon
   intercept <- mean(getCommunitySlope(stable_zoomizer,
@@ -70,7 +70,7 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
                                 min_w = 10^(-3),
                                 min_w_inf = 10^3,
                                 max_w_inf = 10^7,
-                                no_w = (7-(-3))*10+1, # sets dx = 0.1 basically
+                                no_w = (7-(-3))*10+1, # sets dx = 0.1
                                 min_w_pp = 10^(-14.5),
                                 alpha = 0.25, # * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
                                 kappa = exp(intercept), #10^(input$phyto_int) * 10^-1,
@@ -112,7 +112,7 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   initialN(fish_params) <- get_initial_n(fish_params)
   fish_params <- setParams(fish_params)
   
-  return(project(fish_params, t_max = tmax, dt = 0.1, effort = effort))
+  return(project(fish_params, t_max = tmax, dt = 0.01, effort = effort))
 }  
 
 out <- ZooMizer_coupled(ID, tmax = 1000, effort = 0)
