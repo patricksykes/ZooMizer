@@ -11,7 +11,7 @@ source("ZooMizerResourceFunctions.R")
 
 today <- format(Sys.Date(), format = "%Y%m%d")
 
-sims <- read_rds("coupledmodel_24grid_20210701.RDS")
+# sims <- read_rds("coupledmodel_24grid_20210701.RDS")
 enviro <- read_csv("data/enviro_grid20210628.csv")
 
 zoo_groups <- read_csv(file = "data/TestGroups_mizer.csv")[1:9,]
@@ -64,7 +64,7 @@ source("ZooMizerPlots.R")
 
 
 # problem here where fish#5 doesn't have the line shown...
-timeseries <- foreach(i = 1:24) %dopar% {
+timeseries <- foreach(i = 1:20) %dopar% {
   plotBiomass_ZooMizer(sims[[i]], zoo_params)+
     labs(title = paste0("SST = ", enviro$sst[i], ", chlo = ", enviro$chlo[i]))
 }
@@ -73,10 +73,10 @@ library(patchwork)
 timeseriesgrid <- wrap_plots(timeseries, nrow =  6, ncol = 4) + plot_layout(guides = "collect")
 ggsave("timeseries_gridplot.png", timeseriesgrid, width = 16, height = 24)
 
-spectra <- foreach(i = 1:24) %dopar% {
-  plotSpectra_ZooMizer(sims[[i]], zoo_params, time_range = c(501,1000), wlim = c(1e-11, NA))+
+spectra <- foreach(i = 1:20) %dopar% {
+  plotSpectra_ZooMizer(sims[[i]], zoo_params, time_range = c(751,1000), wlim = c(1e-14, NA))+
     labs(title = paste0("SST = ", enviro$sst[i], ", chlo = ", enviro$chlo[i]))
 }
 
-spectplots <- wrap_plots(spectra, nrow =  6, ncol = 4) + plot_layout(guides = "collect")
-ggsave("spectra_gridplot.png", spectplots, width = 16, height = 24)
+spectplots <- wrap_plots(spectra, nrow =  5, ncol = 4) + plot_layout(guides = "collect")
+ggsave("spectra_gridplot_2022.png", spectplots, width = 16, height = 24)

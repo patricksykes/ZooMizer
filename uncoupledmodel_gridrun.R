@@ -1,6 +1,5 @@
 source("fZooMSS_CalculatePhytoParam.R")
-enviro <- expand.grid(sst = seq(0,30,10), chlo = 10^(seq(-1.5,1,.5)))
-enviro <- fZooMSS_CalculatePhytoParam(enviro)
+enviro <- readRDS("data/enviro_grid20.RDS")
 enviro$dt <- 0.01
 enviro$tmax <- 1000
 
@@ -33,7 +32,7 @@ zoomssgrid <- foreach(i=1:nrow(enviro),
                           return(npp)
                         }
                         
-                        fZooMizer_run(groups = Groups, input = input, no_w = )
+                        fZooMizer_run(groups = Groups, input = input, no_w = 177+1)
                       }
 
-saveRDS(zoomssgrid, file = "initial_zooplankton_20210625.RDS")
+saveRDS(zoomssgrid, file = "initial_zooplankton_20220104.RDS")
