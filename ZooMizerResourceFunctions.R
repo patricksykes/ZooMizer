@@ -164,7 +164,7 @@ newZooMizerParams <- function(groups, input, fish_params) {
   
   # params <- setRateFunction(params, "PredRate", "new_PredRate")
   params <- setRateFunction(params, "EReproAndGrowth", "new_EReproAndGrowth")
-  params <- setRateFunction(params, "FeedingLevel", "newFeedingLevel")
+  params <- setRateFunction(params, "FeedingLevel", "FeedingLevel_type1")
   params <- setRateFunction(params, "Encounter", "new_Encounter")
   params <- setRateFunction(params, "PredRate", "new_PredRate")
   params <- setReproduction(params, repro_prop = matrix(0, nrow = nrow(params@psi), ncol = ncol(params@psi)))
@@ -479,9 +479,14 @@ new_EReproAndGrowth <- function(params, n, n_pp, n_other, t, encounter, feeding_
   return(encounter - params@metab)
 }
 
-newFeedingLevel <- function (params, n, n_pp, n_other, t, encounter, ...)
+FeedingLevel_type1 <- function (params, n, n_pp, n_other, t, encounter, ...)
 {
   return(encounter * 0) #zero feeding level corresponds to type 1 feeding
+}
+
+FeedingLevel_type3 <- function (params, n, n_pp, n_other, t, encounter, ...)
+{
+  return(encounter^2 / (encounter^2 + params@intake_max^2)) #sigmoidal type 3 feeding
 }
 
 new_newMultispeciesParams <- function(
