@@ -421,3 +421,135 @@ plotAbundance_ZooMizer <- function (sim, zoo_params, species = NULL, start_time,
     geom_line(aes(colour = Species)) #, linetype = Species)) #, size = Species))
   return(p)
 }
+
+getDiet_ZooMizer <- function(fish_params,
+                             zoo_params = fish_params@other_params$zoo$params,
+                             n = initialN(fish_params), 
+                             n_pp = initialNResource(fish_params),
+                             n_other = initialNOther(fish_params),
+                             proportion = TRUE) {
+  # The code is based on that for getEncounter()
+  fish_params <- validParams(fish_params)
+  zoo_params <- validParams(zoo_params)
+  species <- fish_params@species_params$species
+  zoo_species <- zoo_params@species_params$species
+  no_sp <- length(species)
+  no_zoo <- length(zoo_species)
+  no_w <- length(fish_params@w)
+  no_w_zoo <- length(zoo_params@w)
+  no_w_full <- length(fish_params@w_full)
+  no_other <- length(fish_params@other_encounter)
+  other_names <- names(fish_params@other_encounter)
+  assert_that(identical(dim(n), c(no_sp, no_w)),
+              length(n_pp) == no_w_full)
+  diet <- array(0, dim = c(no_sp, no_w, no_sp + no_zoo + no_other),
+                dimnames = list("predator" = species,
+                                "w" = dimnames(fish_params@initial_n)$w,
+                                "prey" = c(as.character(species), 
+                                           as.character(zoo_species),
+                                           other_names)))
+  # idx_sp are the index values of object@w_full such that
+  # object@w_full[idx_sp] = object@w
+  idx_sp <- (no_w_full - no_w + 1):no_w_full
+  idx_zoo <- (no_w_full - no_w_zoo + 1):no_w_full
+    
+  # If the user has set a custom kernel we can not use fft.
+  if (!is.null(comment(fish_params@pred_kernel))) {
+    # pred_kernel is predator species x predator size x prey size
+    # We want to multiply this by the prey abundance, which is
+    # prey species by prey size, sum over prey size. We use matrix
+    # multiplication for this. Then we multiply 1st and 3rd 
+    ae <- matrix(fish_params@pred_kernel[, , idx_sp, drop = FALSE],
+                 ncol = no_w) %*%
+      t(sweep(n, 2, fish_params@w * fish_params@dw, "*"))
+    diet[, , 1:no_sp] <- ae
+    # Eating the resource
+    diet[, , no_sp + 1:no_sp+no_zoo] <- rowSums(sweep(
+      fish_params@pred_kernel, 3, fish_params@dw_full * fish_params@w_full * fish_params@initial_n_other$zoo, "*"), 
+      dims = 2)
+  } else {
+    prey <- matrix(0, nrow = no_sp + no_zoo, ncol = no_w_full)
+    prey[1:no_sp, idx_sp] <- sweep(n, 2, fish_params@w * fish_params@dw, "*")
+    prey[(no_sp + 1):(no_sp+no_zoo), idx_zoo] <- sweep(fish_params@initial_n_other$zoo, 2, fish_params@w_full[idx_zoo] * fish_params@dw_full[idx_zoo], "*")
+    ft <- array(rep(fish_params@ft_pred_kernel_e, times = no_sp + no_zoo) *
+                  rep(mvfft(t(prey)), each = no_sp),
+                dim = c(no_sp, no_w_full, no_sp + no_zoo))
+    # We now have an array predator x wave number x prey
+    # To Fourier transform back we need a matrix of wave number x everything
+    ft <- matrix(aperm(ft, c(2, 1, 3)), nrow = no_w_full)
+    ae <- array(Re(mvfft(ft, inverse = TRUE) / no_w_full), 
+                dim = c(no_w_full, no_sp, no_sp + no_zoo))
+    ae <- ae[idx_sp, , , drop = FALSE]
+    ae <- aperm(ae, c(2, 1, 3))
+    # Due to numerical errors we might get negative or very small entries that
+    # should be 0
+    ae[ae < 1e-18] <- 0
+    diet[, , 1:(no_sp + no_zoo)] <- ae
+  }
+  # Multiply by interaction matrix, including resource, and then by 
+  # search volume
+  inter <- cbind(fish_params@interaction, fish_params@species_params$interaction_resource)
+  diet[, , 1:(no_sp + 1)] <- sweep(sweep(diet[, , 1:(no_sp + 1), drop = FALSE],
+                                         c(1, 3), inter, "*"), 
+                                   c(1, 2), fish_params@search_vol, "*")
+  
+  # Add diet from other components
+  for (i in seq_along(fish_params@other_encounter)) {
+    diet[, , no_sp + 1 + i] <-
+      do.call(fish_params@other_encounter[[i]], 
+              list(params = fish_params,
+                   n = n, n_pp = n_pp, n_other = n_other,
+                   component = names(fish_params@other_encounter)[[i]]))
+  }
+  
+  # Correct for satiation and keep only entries corresponding to fish sizes
+  f <- getFeedingLevel(fish_params, n, n_pp)
+  fish_mask <- n > 0
+  diet <- sweep(diet, c(1, 2), (1 - f) * fish_mask, "*")
+  if (proportion) {
+    total <- rowSums(diet, dims = 2)
+    diet <- sweep(diet, c(1, 2), total, "/")
+    diet[is.nan(diet)] <- 0
+  }
+  return(diet)
+}
+
+#' Plot diet of fish including plankton group
+#'
+#' @param fish_object 
+#' @param zoo_params 
+#' @param species 
+#' @param return_data 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+plotDiet_ZooMizer <- function (fish_object, zoo_params = NULL, species = NULL, return_data = FALSE) 
+{
+  assert_that(is.flag(return_data))
+  if (is(fish_object, "MizerSim")) {
+    fish_params <- fish_object@params
+    fish_params <- setInitialValues(fish_params, fish_object)
+  } else if (is(fish_object, "MizerParams")) {
+    fish_params <- validParams(fish_object)
+  }
+  if (is.null(zoo_params)){
+    zoo_params <- fish_params@other_params$zoo$params
+  }
+  fish_species <- valid_species_arg(fish_object, species, return.logical = TRUE)
+  zoo_species <- valid_species_arg(zoo_params, NULL, return.logical = TRUE)
+  diet <- getDiet_ZooMizer(fish_params)[fish_species, , ]
+  prey <- dimnames(diet)$prey
+  prey <- factor(prey, levels = rev(prey))
+  plot_dat <- data.frame(w = fish_params@w, Proportion = c(diet), 
+                         Prey = rep(prey, each = length(fish_params@w)))
+  plot_dat <- plot_dat[plot_dat$Proportion > 0.001, ]
+  if (return_data) 
+    return(plot_dat)
+  zoo_params@linecolour[1:no_zoo] <- zoo_params@species_params$PlotColour
+  legend_levels <- intersect(names(c(fish_params@linecolour, zoo_params@linecolour)), plot_dat$Prey)
+  ggplot(plot_dat) + geom_area(aes(x = w, y = Proportion, fill = Prey)) + 
+    scale_x_log10() + labs(x = "Size [g]") + scale_fill_manual(values = c(fish_params@linecolour, zoo_params@linecolour)[legend_levels])
+}
+

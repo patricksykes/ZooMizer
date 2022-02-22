@@ -9,7 +9,7 @@ library(tidyverse)
 source("ZooMizerSummaryFunctions.R")
 source("ZooMizerResourceFunctions.R")
 
-today <- format(Sys.Date(), format = "%Y%m%d")
+# today <- format(Sys.Date(), format = "%Y%m%d")
 
 # sims <- read_rds("coupledmodel_24grid_20210701.RDS")
 enviro <- read_csv("data/enviro_grid20210628.csv")
@@ -22,7 +22,7 @@ cl <- makePSOCKcluster(max(1, detectCores()-1))     ## set up cores-1 machines
 registerDoParallel(cl, cores = (max(1, detectCores()-1)))
 clusterEvalQ(cl, lapply(c("mizer", "assertthat", "tidyverse"), require, character.only = TRUE)) %>% invisible()
 
-all_bioms <- foreach(i=1:24, .combine = rbind) %dopar% {
+all_bioms <- foreach(i=1:20, .combine = rbind) %dopar% {
   source("ZooMizerSummaryFunctions.R")
   colMeans(tail(getBiomass_ZooMizer(sims[[i]], zoo_params),500))
 }
@@ -45,7 +45,7 @@ tiles <- foreach(i = 9:23) %dopar% {
   ggsave(filename = paste0("tileplot_",column,"_",today,".png"))
 }
 
-slopes <- foreach(i=1:24, .combine = rbind) %dopar% colMeans(tail(getCommunitySlope(sims[[i]]),500))[1]
+slopes <- foreach(i=1:20, .combine = rbind) %dopar% colMeans(tail(getCommunitySlope(sims[[i]]),500))[1]
 biom.df$fish_slope <- as.numeric(slopes)
 
 ggplot(biom.df, aes(x = phyto_slope, y = fish_slope))+
@@ -66,17 +66,17 @@ source("ZooMizerPlots.R")
 # problem here where fish#5 doesn't have the line shown...
 timeseries <- foreach(i = 1:20) %dopar% {
   plotBiomass_ZooMizer(sims[[i]], zoo_params)+
-    labs(title = paste0("SST = ", enviro$sst[i], ", chlo = ", enviro$chlo[i]))
+    labs(title = paste0("SST = ", enviro$sst[i], ", chlo = ", round(enviro$chlo[i],3)))
 }
 
 library(patchwork)
 timeseriesgrid <- wrap_plots(timeseries, nrow =  6, ncol = 4) + plot_layout(guides = "collect")
-ggsave("timeseries_gridplot.png", timeseriesgrid, width = 16, height = 24)
+ggsave("timeseries_gridplot_20220128.png", timeseriesgrid, width = 16, height = 24)
 
 spectra <- foreach(i = 1:20) %dopar% {
-  plotSpectra_ZooMizer(sims[[i]], zoo_params, time_range = c(751,1000), wlim = c(1e-14, NA))+
-    labs(title = paste0("SST = ", enviro$sst[i], ", chlo = ", enviro$chlo[i]))
+  plotSpectra_ZooMizer(sims[[i]], zoo_params, time_range = c(51,100), wlim = c(1e-14, NA))+
+    labs(title = paste0("SST = ", enviro$sst[i], ", chlo = ", round(enviro$chlo[i],3)))
 }
 
 spectplots <- wrap_plots(spectra, nrow =  5, ncol = 4) + plot_layout(guides = "collect")
-ggsave("spectra_gridplot_2022.png", spectplots, width = 16, height = 24)
+ggsave("spectra_gridplot_20220128.png", spectplots, width = 16, height = 24)
