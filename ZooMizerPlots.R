@@ -547,6 +547,7 @@ plotDiet_ZooMizer <- function (fish_object, zoo_params = NULL, species = NULL, r
   plot_dat <- plot_dat[plot_dat$Proportion > 0.001, ]
   if (return_data) 
     return(plot_dat)
+  no_zoo <- length(zoo_params@species_params$species)
   zoo_params@linecolour[1:no_zoo] <- zoo_params@species_params$PlotColour
   legend_levels <- intersect(names(c(fish_params@linecolour, zoo_params@linecolour)), plot_dat$Prey)
   ggplot(plot_dat) + geom_area(aes(x = w, y = Proportion, fill = Prey)) + 
