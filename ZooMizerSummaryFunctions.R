@@ -56,12 +56,13 @@ getAbundance_ZooMizer <- function (sim, zoo_params, ...)
 #' Original code by Romain Forestier
 #'
 #' @param params An object of class MizerParams
-#' @param n 
-#' @param n_pp 
-#' @param n_other 
-#' @param proportion 
+#' @param n A matrix of species abundances (species x size)
+#' @param n_pp A vector of the resource abundance by size
+#' @param n_other A list with the abundances of other components
+#' @param proportion Boolean whether diet composition should be returned as a proportion.
+#'     Defaults to true.
 #'
-#' @return
+#' @return A 4-dimensional array (predator species x predator weight x prey x prey weight)
 #' @export
 #'
 #' @examples
@@ -69,7 +70,7 @@ getDietComp <- function (params, n = initialN(params), n_pp = initialNResource(p
                          n_other = initialNOther(params), proportion = TRUE)
 {
   params <- validParams(params)
-  pred_kernel(params) <- pred_kernel(params) #required to 
+  pred_kernel(params) <- pred_kernel(params) #required to make this work
   species <- params@species_params$species
   no_sp <- length(species)
   no_w <- length(params@w)
@@ -157,6 +158,9 @@ getDietComp <- function (params, n = initialN(params), n_pp = initialNResource(p
 #' @export
 #'
 #' @examples
+#' \donttest{
+#' getRealisedPPMRs(NS_params)
+#' }
 getRealisedPPMRs <- function(params) {
   SpIdx <- 1:nrow(params@species_params)
   rPPMR <- vector("numeric", length = length(SpIdx)) # SpIdx is the species index (numeric in my model)
@@ -168,7 +172,7 @@ getRealisedPPMRs <- function(params) {
     # no need to know prey identity
     
     # speciesDat <- apply(speciesDat,c(1,3),sum)
-    speciesDat <- colSums(aperm(speciesDat, c(2,3,1))) # slightly faster
+    speciesDat <- colSums(aperm(speciesDat, c(2,1,3))) # slightly faster
     
     # for each size class need PPMR value
     speciesPPMR <- NULL
