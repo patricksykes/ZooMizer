@@ -70,6 +70,9 @@ plotSpectra_ZooMizer <- function(fish_object, zoo_object,
     if (missing(time_range)) {
       time_range  <- max(as.numeric(dimnames(fish_object@n)$time))
     }
+    if (missing(zoo_object)) {
+      zoo_object <- fish_object@params@other_params$zoo$params
+    }
     time_elements <- get_time_elements(fish_object, time_range)
     n <- apply(fish_object@n[time_elements, , , drop = FALSE], c(2, 3), mean)
     n_pp <- zoo_object@initial_n_pp
@@ -83,7 +86,10 @@ plotSpectra_ZooMizer <- function(fish_object, zoo_object,
                        background = background, highlight = highlight)
     return(ps)
   } else {
-    ps <- plot_spectra_zoomizer(fish_object, zoo_object,
+    if (missing(zoo_object)) {
+      zoo_object <- fish_object@other_params$zoo$params
+    }
+    ps <- plot_spectra_zoomizer(fish_object, zoo_params = fish_object@other_params$zoo$params,
                        n = fish_object@initial_n,
                        n_zoo = zoo_object@initial_n,
                        n_pp = zoo_object@initial_n_pp,
