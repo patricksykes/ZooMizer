@@ -188,6 +188,7 @@ newZooMizerParams <- function(groups, input, fish_params) {
 #' zooplankton component.
 #' 
 #' @param params The MizerParams object describing the fish model
+#' @param n An array (species x size) of the current fish 
 #' @param n_other A list containing the current values of all other ecosystem
 #'   components. Only `n_other$zoo` will be needed by this function. It holds
 #'   the array (type x size) with the current zooplankton abundances.
@@ -201,7 +202,7 @@ newZooMizerParams <- function(groups, input, fish_params) {
 #' 
 #' @return An array (type * size) with the updated zooplankton abundances at
 #'   time `t + dt`.
-zoo_dynamics <- function(params, n_other, rates, t, dt, ...) {
+zoo_dynamics <- function(params, n, n_other, rates, t, dt, ...) {
   # get the MizerParams object for the zooplankton
   zoo_params <- params@other_params$zoo$params
   
@@ -209,6 +210,7 @@ zoo_dynamics <- function(params, n_other, rates, t, dt, ...) {
   total_mort_from_fish <- rates$resource_mort
   
   zoo_idx <- (length(zoo_params@w_full) - length(zoo_params@w) + 1):length(zoo_params@w_full)
+  fish_idx <- (length(params@w_full) - length(params@w) + 1):length(params@w_full)
   
   no_grps_in_size_class <- colSums(n_other$zoo > 0)
   no_grps_in_size_class[which(no_grps_in_size_class == 0)] <- 1
@@ -228,12 +230,17 @@ zoo_dynamics <- function(params, n_other, rates, t, dt, ...) {
 
   steps <- 1  # Number of times to iterate zoo per fish iteration
   zoo_dt <- dt / steps
-  
+
+  # get vector of phytoplankton and fish resource
+  total_fish_n <- params@w_full*0
+  total_fish_n[fish_idx] <- colSums(n)
+  n_pp <- zoo_params@initial_n_pp + total_fish_n
+    
   # get array (type x size) with the current zooplankton abundances
   n <- n_other$zoo
   
   l <- new_project_simple(zoo_params, n = n, 
-                          n_pp = zoo_params@initial_n_pp,
+                          n_pp = n_pp,
                           n_other = list(),
                           t = t, dt = zoo_dt, steps = steps,
                           effort = NULL,
@@ -853,3 +860,17 @@ get_w_min_idx <- function(species_params, w) {
   names(w_min_idx) <- as.character(species_params$species)
   w_min_idx
 }
+
+# predation of zoo on fish
+zoo_predation <- function(params, n, n_pp, n_other, t, f_mort, pred_mort, ...){
+  
+  idx_sp_zoo <- (length(params@w_full) - length(params@w) + 1):length(params@other_params$zoo$params@w)
+  
+  pred_rate <- new_PredRate(params@other_params$zoo$params, n_other$zoo, n_pp, n_other, t, feeding_level=0)[,idx_sp_zoo]
+  
+  mort <- n*0
+  mort[,1:length(idx_sp_zoo)] <- matrix(colSums(pred_rate), nrow=length(params@species_params$species), ncol = length(idx_sp_zoo), byrow = TRUE)
+  
+  return(mort)
+}
+
