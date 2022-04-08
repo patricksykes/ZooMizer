@@ -293,6 +293,9 @@ plotBiomass_ZooMizer <- function (sim, zoo_params, species = NULL, start_time, e
           ...) 
 {
   species <- valid_species_arg(sim, species)
+  if (missing(zoo_params)) {
+    zoo_params <- sim@params@other_params$zoo$params
+  }
   if (missing(start_time)) 
     start_time <- as.numeric(dimnames(sim@n)[[1]][1])
   if (missing(end_time)) 
@@ -323,11 +326,12 @@ plotBiomass_ZooMizer <- function (sim, zoo_params, species = NULL, start_time, e
                          linetype = sim@params@linetype["Background"])
     }
   }
-  linesize <- rep(0.8, length(sim@params@linetype))
-  names(linesize) <- names(sim@params@linetype)
+  linesize <- rep(0.8, length(c(zoo_params@species_params$species,sim@params@linetype)))
+  names(linesize) <- c(zoo_params@species_params$species, names(sim@params@linetype))
   linesize[highlight] <- 1.6
-  p <- p + # scale_size_manual(values = linesize) +
-         geom_line(aes(colour = Species)) #, linetype = Species)) #, size = Species))
+  p <- p + geom_line(aes(colour = Species ,linetype = Species , size = Species)) +
+         scale_linetype_manual(values = c(zoo_params@linetype[1:nrow(zoo_params@species_params)], sim@params@linetype))+
+         scale_size_manual(values = linesize)
   return(p)
 }
 
@@ -560,3 +564,122 @@ plotDiet_ZooMizer <- function (fish_object, zoo_params = NULL, species = NULL, r
     scale_x_log10() + labs(x = "Size [g]") + scale_fill_manual(values = c(fish_params@linecolour, zoo_params@linecolour)[legend_levels])
 }
 
+plotBackgroundMort <- function (object, species = NULL, time_range, all.sizes = FALSE, 
+                                highlight = NULL, return_data = FALSE, ...) 
+{
+  assert_that(is.flag(all.sizes), is.flag(return_data))
+  if (is(object, "MizerSim")) {
+    if (missing(time_range)) {
+      time_range <- max(as.numeric(dimnames(object@n)$time))
+    }
+    params <- object@params
+  }
+  else {
+    params <- validParams(object)
+  }
+  mu_b <- params@mu_b
+  
+  species <- valid_species_arg(params, species)
+  mu_b <- mu_b[as.character(dimnames(mu_b)[[1]]) %in% 
+                           species, , drop = FALSE]
+  plot_dat <- data.frame(w = rep(params@w, each = length(species)), 
+                         value = c(mu_b), Species = species)
+  if (!all.sizes) {
+    for (sp in species) {
+      plot_dat$value[plot_dat$Species == sp & (plot_dat$w < 
+                                                 params@species_params[sp, "w_min"] | plot_dat$w > 
+                                                 params@species_params[sp, "w_inf"])] <- NA
+    }
+    plot_dat <- plot_dat[complete.cases(plot_dat), ]
+  }
+  if (return_data) 
+    return(plot_dat)
+  p <- plotDataFrame(plot_dat, params, xlab = "Size [g]", 
+                     xtrans = "log10", highlight = highlight)
+  suppressMessages(p <- p + scale_y_continuous(labels = prettyNum, 
+                                               name = "Background mortality [1/year]", limits = c(0, 
+                                                                                                 max(plot_dat$value))))
+  p
+}
+
+plotlyBackgroundMort <- function (object, species = NULL, time_range, highlight = NULL, 
+                                  ...) 
+{
+  argg <- as.list(environment())
+  ggplotly(do.call("plotBackgroundMort", argg), tooltip = c("Species", 
+                                                      "w", "value"))
+}
+
+summary_plot <- function(object, time_range) {
+  if (is(object, "MizerSim")) {
+    params <- object@params
+    }
+  else {
+    params <- validParams(object)
+  }
+  if (missing(time_range)) {
+    time_range  <- max(as.numeric(dimnames(object@n)$time))
+  }
+  
+  ts <- plotBiomass_ZooMizer(object)
+  ss <- plotSpectra_ZooMizer(object, time_range = time_range)
+  diet <- plotDiet_ZooMizer(object, species = tail(object@params@species_params$species, 1))
+  bg <- plotBackgroundMort(object)
+  
+  plot <- (ts + ss) / (bg + diet) + plot_layout(guides = "collect")
+  
+  return(plot)
+}
+
+plotBackgroundMort_ZooMizer <- function(object, species = NULL, time_range, all.sizes = FALSE, 
+                                                 highlight = NULL, return_data = FALSE, ...) {
+  assert_that(is.flag(all.sizes), is.flag(return_data))
+  if (is(object, "MizerSim")) {
+    if (missing(time_range)) {
+      time_range <- max(as.numeric(dimnames(object@n)$time))
+    }
+    params <- object@params
+  }
+  else {
+    params <- validParams(object)
+  }
+  zoobg <- plotBackgroundMort(params@other_params$zoo$params, species = species, time_range = time_range, all.sizes = all.sizes, highlight = highlight,
+                              return_data = TRUE)
+  fishbg <- plotBackgroundMort(params, species = species, time_range = time_range, all.sizes = all.sizes, highlight = highlight,
+                              return_data = TRUE)
+  
+  frame <- rbind(zoobg, fishbg)
+  
+  # p <- plotDataFrame(plot_dat, params, xlab = "Size [g]", 
+  #                    xtrans = "log10", highlight = highlight)
+  
+  var_names <- names(frame)
+  x_var <- var_names[[1]]
+  y_var <- var_names[[2]]
+  group_var <- var_names[[3]]
+  frame$Legend <- frame[[group_var]]
+  legend_var <- "Legend"
+  legend_levels <- intersect(c(names(params@other_params$zoo$params@linecolour),names(params@linecolour)), frame[[legend_var]])
+  frame[[legend_var]] <- factor(frame[[legend_var]], levels = legend_levels)
+  linecolour <- c(params@other_params$zoo$params@linecolour,params@linecolour)[legend_levels]
+  linetype <- c(params@other_params$zoo$params@linetype,params@linetype)[legend_levels]
+  linesize <- rep_len(0.8, length(legend_levels))
+  names(linesize) <- legend_levels
+  linesize[highlight] <- 1.6
+  xbreaks <- log_breaks()
+  ybreaks <- waiver()
+  
+  p <- ggplot(frame, aes(group = .data[[group_var]])) +
+    scale_y_continuous(trans = "identity", breaks = ybreaks, labels = prettyNum, name = waiver()) + 
+    scale_x_continuous(trans = "log10", name = waiver()) +
+    # scale_colour_manual(values = linecolour) + 
+    scale_linetype_manual(values = linetype) + scale_size_manual(values = linesize) + 
+    geom_line(aes(x = .data[[x_var]], y = .data[[y_var]], 
+                  colour = .data[[legend_var]], linetype = .data[[legend_var]], 
+                  size = .data[[legend_var]]))
+  
+  suppressMessages(p <- p + scale_y_continuous(labels = prettyNum, 
+                                               name = "Background mortality [1/year]",
+                                               limits = c(0,max(plot_dat$value))))
+  p
+}
