@@ -650,6 +650,9 @@ plotBackgroundMort_ZooMizer <- function(object, species = NULL, time_range, all.
   
   frame <- rbind(zoobg, fishbg)
   
+  if (return_data)
+    return(frame)
+  
   # p <- plotDataFrame(plot_dat, params, xlab = "Size [g]", 
   #                    xtrans = "log10", highlight = highlight)
   
@@ -661,7 +664,9 @@ plotBackgroundMort_ZooMizer <- function(object, species = NULL, time_range, all.
   legend_var <- "Legend"
   legend_levels <- intersect(c(names(params@other_params$zoo$params@linecolour),names(params@linecolour)), frame[[legend_var]])
   frame[[legend_var]] <- factor(frame[[legend_var]], levels = legend_levels)
-  linecolour <- c(params@other_params$zoo$params@linecolour,params@linecolour)[legend_levels]
+  zoocols <- params@other_params$zoo$params@species_params$PlotColour
+  names(zoocols) <- params@other_params$zoo$params@species_params$species
+  linecolour <- c(zoocols,params@linecolour)[legend_levels]
   linetype <- c(params@other_params$zoo$params@linetype,params@linetype)[legend_levels]
   linesize <- rep_len(0.8, length(legend_levels))
   names(linesize) <- legend_levels
@@ -672,7 +677,7 @@ plotBackgroundMort_ZooMizer <- function(object, species = NULL, time_range, all.
   p <- ggplot(frame, aes(group = .data[[group_var]])) +
     scale_y_continuous(trans = "identity", breaks = ybreaks, labels = prettyNum, name = waiver()) + 
     scale_x_continuous(trans = "log10", name = waiver()) +
-    # scale_colour_manual(values = linecolour) + 
+    scale_colour_manual(values = linecolour) + 
     scale_linetype_manual(values = linetype) + scale_size_manual(values = linesize) + 
     geom_line(aes(x = .data[[x_var]], y = .data[[y_var]], 
                   colour = .data[[legend_var]], linetype = .data[[legend_var]], 
@@ -683,3 +688,4 @@ plotBackgroundMort_ZooMizer <- function(object, species = NULL, time_range, all.
                                                limits = c(0,max(plot_dat$value))))
   p
 }
+
