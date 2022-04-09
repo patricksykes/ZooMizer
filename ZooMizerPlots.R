@@ -622,11 +622,12 @@ summary_plot <- function(object, time_range) {
   }
   
   ts <- plotBiomass_ZooMizer(object)
-  ss <- plotSpectra_ZooMizer(object, time_range = time_range)
-  diet <- plotDiet_ZooMizer(object, species = tail(object@params@species_params$species, 1))
-  bg <- plotBackgroundMort(object)
+  ss <- plotSpectra_ZooMizer(object, time_range = time_range, resource = FALSE, wlim = c(1e-14, NA))+theme(legend.position = "none")
+  diet <- plotDiet_ZooMizer(object, species = tail(object@params@species_params$species, 1))+theme(legend.position = "none")+labs(y="Proportion of fish diet")
+  bg <- plotBackgroundMort_ZooMizer(object)+theme(legend.position = "none")
+  pred <- plotPredMort_ZooMizer(object)+theme(legend.position = "none")
   
-  plot <- (ts + ss) / (bg + diet) + plot_layout(guides = "collect")
+  plot <- (ts + ss) / (bg + pred + diet) + plot_layout(guides = "collect")
   
   return(plot)
 }
