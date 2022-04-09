@@ -819,3 +819,63 @@ fish_idx <- (length(params@w_full) - length(params@w) + 1):length(params@w_full)
   p
   }
 
+plotTotalMort_ZooMizer <- function (object, species = NULL, time_range, all.sizes = FALSE,
+                                   highlight = NULL, return_data = FALSE, ...)
+{
+  assert_that(is.flag(all.sizes), is.flag(return_data))
+  if (is(object, "MizerSim")) {
+    if (missing(time_range)) {
+      time_range <- max(as.numeric(dimnames(object@n)$time))
+      params <- setInitialValues(object@params, object)
+    }
+  } else {
+    params <- validParams(object)
+  }
+  
+  pred <- plotPredMort_ZooMizer(object, return_data = TRUE, all.sizes = FALSE) %>% 
+    reshape2::acast(Species ~ w)
+  zoo_idx <- which(params@w_full >= min(params@other_params$zoo$params@w))
+  pred <- pred[,zoo_idx]
+  pred[is.na(pred)] <- 0
+  
+  bg <- plotBackgroundMort_ZooMizer(object, return_data = TRUE, all.sizes = FALSE) %>% 
+    reshape2::acast(Species ~ w)
+    bg[is.na(bg)] <- 0
+  
+  frame <- pred + bg
+  frame <- melt(frame)
+  
+  names(frame) <- list("Species", "w", "Mort")
+  
+  var_names <- names(frame)
+  x_var <- var_names[[2]]
+  y_var <- var_names[[3]]
+  group_var <- var_names[[1]]
+  frame$Legend <- frame[[group_var]]
+  legend_var <- "Legend"
+  legend_levels <- intersect(c(names(params@other_params$zoo$params@linecolour),names(params@linecolour)), frame[[legend_var]])
+  frame[[legend_var]] <- factor(frame[[legend_var]], levels = legend_levels)
+  zoocols <- params@other_params$zoo$params@species_params$PlotColour
+  names(zoocols) <- params@other_params$zoo$params@species_params$species
+  linecolour <- c(zoocols,params@linecolour)[legend_levels]
+  linetype <- c(params@other_params$zoo$params@linetype,params@linetype)[legend_levels]
+  linesize <- rep_len(0.8, length(legend_levels))
+  names(linesize) <- legend_levels
+  linesize[highlight] <- 1.6
+  xbreaks <- log_breaks()
+  ybreaks <- waiver()
+  
+  p <- ggplot(frame, aes(group = .data[[group_var]])) +
+    scale_y_continuous(trans = "identity", breaks = ybreaks, labels = prettyNum, name = waiver()) + 
+    scale_x_continuous(trans = "log10", name = waiver()) +
+    scale_linetype_manual(values = linetype) + scale_size_manual(values = linesize) + 
+    geom_line(aes(x = .data[[x_var]], y = .data[[y_var]], 
+                  colour = .data[[legend_var]], linetype = .data[[legend_var]], 
+                  size = .data[[legend_var]]))+
+    scale_colour_manual(values = linecolour)
+  
+  suppressMessages(p <- p + scale_y_continuous(labels = prettyNum, 
+                                               name = "Total mortality [1/year]",
+                                               limits = c(0,max(plot_dat$value))))
+  p
+}
