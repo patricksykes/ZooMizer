@@ -689,3 +689,133 @@ plotBackgroundMort_ZooMizer <- function(object, species = NULL, time_range, all.
   p
 }
 
+getPredMort_ZooMizer <- function(object) {
+  if (is(object, "MizerSim")) {
+        params <- setInitialValues(object@params, object)
+        }
+      else {
+        params <- validParams(object)
+      }
+ 
+  total_mort_from_fish <- getResourceMort(params)
+  
+  zoo_params <- params@other_params$zoo$params
+  zoo_idx <- (length(zoo_params@w_full) - length(zoo_params@w) + 1):length(zoo_params@w_full)
+  fish_idx <- (length(params@w_full) - length(params@w) + 1):length(params@w_full)
+  
+  no_grps_in_size_class <- colSums(params@initial_n_other$zoo > 0)
+  no_grps_in_size_class[which(no_grps_in_size_class == 0)] <- 1
+  no_grps_in_size_class[which(is.na(no_grps_in_size_class))] <- 1
+  
+  if(any(no_grps_in_size_class == 0)) {stop("NaNs produced by mort / # of groups") }
+  
+  n_eff <- colSums(sweep(params@initial_n_other$zoo, 1,
+                         zoo_params@species_params$Carbon * zoo_params@species_params$GrossGEscale,
+                         "*")) / params@species_params$alpha[1]
+  
+  scaling <- sapply(as.data.frame(rbind(colSums(params@initial_n_other$zoo) / n_eff, 0)), max, na.rm = TRUE) # re-scale by carbon content, set NAs to 0.
+  resmort <- matrix(total_mort_from_fish[zoo_idx] / no_grps_in_size_class * scaling, byrow = TRUE, nrow = nrow(zoo_params@species_params), ncol = length(zoo_params@w))
+  predmort <- resmort + getPredMort(params@other_params$zoo$params)
+  
+  fpm <- getPredMort(params, drop = FALSE)
+  
+  
+  
+  fish_species <- valid_species_arg(params, NULL)
+  zoo_species <- valid_species_arg(zoo_params, NULL)
+  species <- union(zoo_species, fish_species)
+  
+  for (sp in 1:length(fish_species)) {
+    fpm[sp,params@w < params@species_params[sp, "w_min"] | params@w > params@species_params[sp, "w_inf"]] <- 0
+  }
+  
+  for (sp in 1:length(zoo_species)) {
+    predmort[sp,zoo_params@w < zoo_params@species_params[sp, "w_min"] | zoo_params@w > zoo_params@species_params[sp, "w_inf"]] <- 0
+  }
+  
+  pred_mort <- matrix(0, nrow=length(species), ncol = length(zoo_params@w_full))
+  dimnames(pred_mort)[[1]] <- as.character(species)
+  dimnames(pred_mort)[[2]] <- as.character(params@w_full)
+  pred_mort[1:length(zoo_species), zoo_idx] <- predmort
+  pred_mort[(length(zoo_species)+1):length(species), fish_idx] <- fpm
+  
+  return(pred_mort)
+}
+
+plotPredMort_ZooMizer <- function (object, species = NULL, time_range, all.sizes = FALSE,
+                                   highlight = NULL, return_data = FALSE, ...)
+{
+  assert_that(is.flag(all.sizes), is.flag(return_data))
+  if (is(object, "MizerSim")) {
+    if (missing(time_range)) {
+      time_range <- max(as.numeric(dimnames(object@n)$time))
+      params <- setInitialValues(object@params, object)
+    }
+  } else {
+    params <- validParams(object)
+    }
+
+pred_mort <- getPredMort_ZooMizer(object)
+
+zoo_params <- params@other_params$zoo$params
+zoo_idx <- (length(zoo_params@w_full) - length(zoo_params@w) + 1):length(zoo_params@w_full)
+fish_idx <- (length(params@w_full) - length(params@w) + 1):length(params@w_full)
+
+  if (length(dim(pred_mort)) == 3) {
+    pred_mort <- apply(pred_mort, c(2, 3), mean)
+  }
+  fish_species <- valid_species_arg(params, species)
+  zoo_species <- valid_species_arg(zoo_params, NULL)
+  species <- union(zoo_species, fish_species)
+  pred_mort <- pred_mort[as.character(dimnames(pred_mort)[[1]]) %in%
+                           species, , drop = FALSE]
+
+  plot_dat <- data.frame(w = rep(params@w_full, each = length(species)),
+                         value = c(pred_mort), Species = species)
+  if (!all.sizes) {
+    specieslist <- merge(params@species_params, params@other_params$zoo$params@species_params, all = TRUE)
+    for (sp in species) {
+      plot_dat$value[plot_dat$Species == sp & (plot_dat$w <
+                                                 specieslist[sp, "w_min"] | plot_dat$w >
+                                                 specieslist[sp, "w_inf"])] <- NA
+    }
+    plot_dat <- plot_dat[complete.cases(plot_dat), ]
+  }
+  if (return_data)
+    return(plot_dat)
+  
+  frame <- plot_dat
+  
+  var_names <- names(frame)
+  x_var <- var_names[[1]]
+  y_var <- var_names[[2]]
+  group_var <- var_names[[3]]
+  frame$Legend <- frame[[group_var]]
+  legend_var <- "Legend"
+  legend_levels <- intersect(c(names(params@other_params$zoo$params@linecolour),names(params@linecolour)), frame[[legend_var]])
+  frame[[legend_var]] <- factor(frame[[legend_var]], levels = legend_levels)
+  zoocols <- params@other_params$zoo$params@species_params$PlotColour
+  names(zoocols) <- params@other_params$zoo$params@species_params$species
+  linecolour <- c(zoocols,params@linecolour)[legend_levels]
+  linetype <- c(params@other_params$zoo$params@linetype,params@linetype)[legend_levels]
+  linesize <- rep_len(0.8, length(legend_levels))
+  names(linesize) <- legend_levels
+  linesize[highlight] <- 1.6
+  xbreaks <- log_breaks()
+  ybreaks <- waiver()
+  
+  p <- ggplot(frame, aes(group = .data[[group_var]])) +
+    scale_y_continuous(trans = "identity", breaks = ybreaks, labels = prettyNum, name = waiver()) + 
+    scale_x_continuous(trans = "log10", name = waiver()) +
+    scale_linetype_manual(values = linetype) + scale_size_manual(values = linesize) + 
+    geom_line(aes(x = .data[[x_var]], y = .data[[y_var]], 
+                  colour = .data[[legend_var]], linetype = .data[[legend_var]], 
+                  size = .data[[legend_var]]))+
+    scale_colour_manual(values = linecolour)
+  
+  suppressMessages(p <- p + scale_y_continuous(labels = prettyNum, 
+                                               name = "Predation mortality [1/year]",
+                                               limits = c(0,max(plot_dat$value))))
+  p
+  }
+
