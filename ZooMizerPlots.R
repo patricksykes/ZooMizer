@@ -629,7 +629,7 @@ summary_plot <- function(object, time_range) {
   tm <- plotTotalMort_ZooMizer(object)+theme(legend.position = "none")
   
   plot <- (ts + ss + diet) / (bg + pred + tm) + plot_layout(guides = "collect")
-  
+
   return(plot)
 }
 
