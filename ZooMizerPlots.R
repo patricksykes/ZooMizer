@@ -915,3 +915,172 @@ mort_from_fish <- matrix(total_mort_from_fish[zoo_idx] / no_grps_in_size_class *
 return(getMort(zoo_params) + mort_from_fish)
 }
 
+getGrowthCurves_ZooMizer <- function (object, species = NULL, max_age = 10, percentage = FALSE) 
+{
+  if (is(object, "MizerSim")) {
+    params <- object@params
+    params <- setInitialValues(params, object)
+  }
+  else if (is(object, "MizerParams")) {
+    params <- validParams(object)
+  }
+  else {
+    stop("The first argument to `getGrowthCurves()` must be a ", 
+         "MizerParams or a MizerSim object.")
+  }
+  zoo_params <- params@other_params$zoo$params
+  
+  species <- valid_species_arg(zoo_params, species)
+  idx <- which(zoo_params@species_params$species %in% species)
+  species <- zoo_params@species_params$species[idx]
+  age <- seq(0, max_age, length.out = 50)
+  dt <- rep(age[2]-age[1], 50)
+  ws <- array(dim = c(length(species), length(age)), dimnames = list(Species = species, 
+                                                                     Age = age))
+  # get vector of phytoplankton and fish resource
+  total_fish_n <- params@w_full*0
+  total_fish_n[fish_idx] <- colSums(n)
+  
+  g <- getEGrowth(zoo_params, n_pp = zoo_params@initial_n_pp + total_fish_n)
+  m <- getZooMort(params)
+  for (j in seq_along(species)) {
+    i <- idx[j]
+    g_fn <- stats::approxfun(c(log(zoo_params@w), log(zoo_params@species_params$w_inf[[i]])), 
+                             c(g[i, ], 0))
+    myodefun <- function(t, state, parameters) {
+      return(list(g_fn(state)))
+    }
+    ws[j, ] <- deSolve::ode(y = log(zoo_params@w[zoo_params@w_min_idx[i]]), 
+                            times = age, func = myodefun)[, 2]
+    if (percentage) {
+      ws[j, ] <- ws[j, ]/zoo_params@species_params$w_inf[j] * 100
+    }
+  }
+  
+  return(ws)
+}
+
+getSurvivalcurves_ZooMizer<- function(object, species = NULL, max_age = 10, percentage = FALSE) 
+{
+  if (is(object, "MizerSim")) {
+    params <- object@params
+    params <- setInitialValues(params, object)
+  }
+  else if (is(object, "MizerParams")) {
+    params <- validParams(object)
+  }
+  else {
+    stop("The first argument to `getGrowthCurves()` must be a ", 
+         "MizerParams or a MizerSim object.")
+  }
+  zoo_params <- params@other_params$zoo$params
+  
+  species <- valid_species_arg(zoo_params, species)
+  idx <- which(zoo_params@species_params$species %in% species)
+  species <- zoo_params@species_params$species[idx]
+  age <- seq(0, max_age, length.out = 50)
+  # dt <- rep(age[2]-age[1], 50)
+  ws <- array(dim = c(length(species), length(age)), dimnames = list(Species = species, 
+                                                                     Age = age))
+  # get vector of phytoplankton and fish resource
+  total_fish_n <- params@w_full*0
+  total_fish_n[fish_idx] <- colSums(n)
+  
+  g <- getEGrowth(zoo_params, n_pp = zoo_params@initial_n_pp + total_fish_n)
+  m <- getZooMort(params)
+  for (j in seq_along(species)) {
+    i <- idx[j]
+    m_fn <- stats::approxfun(c(zoo_params@w, zoo_params@species_params$w_inf[[i]]), 
+                              c(m[i, ], 0))
+    
+    survival <- function(t, state, parameters) {
+      with(as.list(c(state, parameters)), {
+        dS <- - m_fn(w) * S
+        list(c(w,dS))
+      })
+    }
+    
+    ws[j, ] <- deSolve::ode(y=c(w=zoo_params@species_params$w_min[j], S=1),
+                            times = age, func = survival,
+                            parms = 0)[,3]
+  }
+  # if (percentage) {
+  #   ws[, ] <- ws[, ]/ws[,1] * 100
+  # }
+  
+  return(ws)
+}
+
+# getSurvivaltosize_ZooMizer <- function(object, species = NULL, max_age = 10, percentage = FALSE) 
+#   {
+#     if (is(object, "MizerSim")) {
+#       params <- object@params
+#       params <- setInitialValues(params, object)
+#     }
+#     else if (is(object, "MizerParams")) {
+#       params <- validParams(object)
+#     }
+#     else {
+#       stop("The first argument to `getGrowthCurves()` must be a ", 
+#            "MizerParams or a MizerSim object.")
+#     }
+#     zoo_params <- params@other_params$zoo$params
+#     
+#     species <- valid_species_arg(zoo_params, species)
+#     idx <- which(zoo_params@species_params$species %in% species)
+#     species <- zoo_params@species_params$species[idx]
+#     age <- seq(0, max_age, length.out = 50)
+#     # dt <- rep(age[2]-age[1], 50)
+#     ws <- array(dim = c(length(species), length(age)), dimnames = list(Species = species, 
+#                                                                        Weight = w))
+#     # get vector of phytoplankton and fish resource
+#     total_fish_n <- params@w_full*0
+#     total_fish_n[fish_idx] <- colSums(n)
+#     
+#     g <- getEGrowth(zoo_params, n_pp = zoo_params@initial_n_pp + total_fish_n)
+#     m <- getZooMort(params)
+#     for (j in seq_along(species)) {
+#       i <- idx[j]
+#       mg_fn <- stats::approxfun(c(zoo_params@w, zoo_params@species_params$w_inf[[i]]), 
+#                                 c(-m[i, ]/g[i, ], 0))
+#       
+#       survival <- function(t, state, parameters) {
+#         with(as.list(c(state, parameters)), {
+#           dS <- mg_fn(w) * S
+#           list(c(w,dS))
+#         })
+#       }
+#       
+#       ws[j, ] <- deSolve::ode(y=c(w=zoo_params@species_params$w_min[j], S=1),
+#                               times = age, func = survival,
+#                               parms = 0)[,3]
+#     }
+#     if (percentage) {
+#     ws <- ws * 100
+# 
+#     return(ws)
+#   }
+
+    
+plotSurvivalcurves_ZooMizer <- function(object, species = NULL, max_age = 10, percentage = FALSE){
+  
+  if (is(object, "MizerSim")) {
+    params <- object@params
+    params <- setInitialValues(params, object)
+  }
+  else if (is(object, "MizerParams")) {
+    params <- validParams(object)
+  }
+  else {
+    stop("The first argument to `getGrowthCurves()` must be a ", 
+         "MizerParams or a MizerSim object.")
+  }
+  
+  ws <- getSurvivalcurves_ZooMizer(object, species, max_age, percentage)
+  colours <- params@other_params$zoo$params@species_params$PlotColour
+  plot_dat <- melt(ws)
+  p <- ggplot(plot_dat)+
+    geom_line(aes(x=Age, y=value, colour = Species))+
+    scale_colour_manual(values = colours)
+  p
+}
