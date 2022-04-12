@@ -627,8 +627,11 @@ summary_plot <- function(object, time_range) {
   bg <- plotBackgroundMort_ZooMizer(object)+theme(legend.position = "none")
   pred <- plotPredMort_ZooMizer(object)+theme(legend.position = "none")
   tm <- plotTotalMort_ZooMizer(object)+theme(legend.position = "none")
+  gc <- plotGrowthCurves(params@other_params$zoo$params, percentage = TRUE, max_age = 3)+
+    scale_colour_manual(values =  params@other_params$zoo$params@species_params$PlotColour)+
+    theme(legend.position = "none")
   
-  plot <- (ts + ss + diet) / (bg + pred + tm) + plot_layout(guides = "collect")
+  plot <- (ts + ss + diet) / (bg + pred + tm + gc) + plot_layout(guides = "collect")
 
   return(plot)
 }
@@ -881,3 +884,34 @@ plotTotalMort_ZooMizer <- function (object, species = NULL, time_range, all.size
                                                limits = c(0,max(plot_dat$value))))
   p
 }
+
+
+getZooMort <- function(params, n = initialN(params), n_pp = initialNResource(params), 
+                       n_other = initialNOther(params), effort = getInitialEffort(params), 
+                       t = 0, ...) {
+
+zoo_params <- params@other_params$zoo$params
+
+# get predation mortality imposed by the fish - note that this is scaled by carbon content and must be rescaled
+total_mort_from_fish <- getResourceMort(params)
+
+zoo_idx <- (length(zoo_params@w_full) - length(zoo_params@w) + 1):length(zoo_params@w_full)
+fish_idx <- (length(params@w_full) - length(params@w) + 1):length(params@w_full)
+
+no_grps_in_size_class <- colSums(n_other$zoo > 0)
+no_grps_in_size_class[which(no_grps_in_size_class == 0)] <- 1
+no_grps_in_size_class[which(is.na(no_grps_in_size_class))] <- 1
+
+if(any(no_grps_in_size_class == 0)) {stop("NaNs produced by mort / # of groups") }
+
+n_eff <- colSums(sweep(n_other$zoo, 1, 
+                       zoo_params@species_params$Carbon * zoo_params@species_params$GrossGEscale, 
+                       "*")) / params@species_params$alpha[1]
+
+scaling <- sapply(as.data.frame(rbind(colSums(n_other$zoo) / n_eff, 0)), max, na.rm = TRUE) # re-scale by carbon content, set NAs to 0.
+mort_from_fish <- matrix(total_mort_from_fish[zoo_idx] / no_grps_in_size_class * scaling, byrow = TRUE, nrow = nrow(zoo_params@species_params), ncol = length(zoo_params@w))
+
+# add mortality of fish eating zoo to the external mortality. Better if this was done as a fishing mortality?
+return(getMort(zoo_params) + mort_from_fish)
+}
+
