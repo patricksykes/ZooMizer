@@ -690,7 +690,7 @@ plotBackgroundMort_ZooMizer <- function(object, species = NULL, time_range, all.
   
   suppressMessages(p <- p + scale_y_continuous(labels = prettyNum, 
                                                name = "Background mortality [1/year]",
-                                               limits = c(0,max(plot_dat$value))))
+                                               limits = c(0,max(frame$value))))
   p
 }
 
