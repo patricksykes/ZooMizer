@@ -984,7 +984,8 @@ getSurvivalcurves_ZooMizer<- function(object, species = NULL, max_age = 10, perc
                                                                      Age = age))
   # get vector of phytoplankton and fish resource
   total_fish_n <- params@w_full*0
-  total_fish_n[fish_idx] <- colSums(n)
+  fish_idx <- (length(params@w_full) - length(params@w) + 1):length(params@w_full)
+  total_fish_n[fish_idx] <- colSums(params@initial_n)
   
   g <- getEGrowth(zoo_params, n_pp = zoo_params@initial_n_pp + total_fish_n)
   m <- getZooMort(params)
