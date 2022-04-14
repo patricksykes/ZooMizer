@@ -1063,7 +1063,7 @@ getSurvivalcurves_ZooMizer<- function(object, species = NULL, max_age = 10, perc
 #   }
 
     
-plotSurvivalcurves_ZooMizer <- function(object, species = NULL, max_age = 10, percentage = FALSE){
+plotSurvivalcurves_ZooMizer <- function(object, species = NULL, max_age = 10, percentage = FALSE, return_data = FALSE, highlight = NULL, species_panel = FALSE){
   
   if (is(object, "MizerSim")) {
     params <- object@params
@@ -1076,12 +1076,142 @@ plotSurvivalcurves_ZooMizer <- function(object, species = NULL, max_age = 10, pe
     stop("The first argument to `getGrowthCurves()` must be a ", 
          "MizerParams or a MizerSim object.")
   }
-  
+  zoo_params <- params@other_params$zoo$params
+  species <- valid_species_arg(zoo_params, species)
+  sp_sel <- zoo_params@species_params$species %in% species
+    
   ws <- getSurvivalcurves_ZooMizer(object, species, max_age, percentage)
-  colours <- params@other_params$zoo$params@species_params$PlotColour
+  
+  colours <- zoo_params@species_params$PlotColour[sp_sel]
+  names(colours) <- zoo_params@species_params$species
+
   plot_dat <- melt(ws)
-  p <- ggplot(plot_dat)+
-    geom_line(aes(x=Age, y=value, colour = Species))+
-    scale_colour_manual(values = colours)
-  p
+  plot_dat$Species <- factor(plot_dat$Species, zoo_params@species_params$species)
+  plot_dat$Legend <- "model"
+  
+  if (return_data) 
+    return(plot_dat)
+  p <- ggplot(filter(plot_dat, Legend == "model")) + 
+    geom_line(aes(x = Age, y = value, colour = Species, linetype = Species, 
+                  size = Species))
+  y_label <- if (percentage) 
+    "Percent of cohort remaining"
+  else "Fraction of cohort remaining"
+  
+  legend_levels <- intersect(c(dimnames(zoo_params@initial_n)$sp, 
+                               "Background", "Resource", "Total"), 
+                             plot_dat$Species)
+  plot_dat$Species <- factor(plot_dat$Species, levels = legend_levels)
+  linesize <- rep(0.8, length(legend_levels))
+  names(linesize) <- names(zoo_params@linetype[legend_levels])
+  linesize[highlight] <- 1.6
+  p <- p + scale_x_continuous(name = "Age [Years]") + 
+    scale_y_continuous(name = y_label) + scale_colour_manual(values = colours[legend_levels]) + 
+    scale_linetype_manual(values = zoo_params@linetype[legend_levels]) + 
+    scale_size_manual(values = linesize)
+  if (species_panel) {
+    p <- ggplot(plot_dat) + geom_line(aes(x = Age, y = value, 
+                                          colour = Legend)) + scale_x_continuous(name = "Age [years]") + 
+      scale_y_continuous(name = y_label) + 
+      facet_wrap(~Species, scales = "free_y")
+  }
+  return(p)
+}
+
+
+getSurvivalcurves<- function(object, species = NULL, max_age = 10, percentage = FALSE) 
+{
+  if (is(object, "MizerSim")) {
+    params <- object@params
+    params <- setInitialValues(params, object)
+  }
+  else if (is(object, "MizerParams")) {
+    params <- validParams(object)
+  }
+  else {
+    stop("The first argument to `getGrowthCurves()` must be a ", 
+         "MizerParams or a MizerSim object.")
+  }
+
+  species <- valid_species_arg(params, species)
+  idx <- which(params@species_params$species %in% species)
+  species <- params@species_params$species[idx]
+  age <- seq(0, max_age, length.out = 50)
+  # dt <- rep(age[2]-age[1], 50)
+  ws <- array(dim = c(length(species), length(age)), dimnames = list(Species = species, 
+                                                                     Age = age))
+  # get vector of phytoplankton and fish resource
+  
+  m <- getMort(params)
+  for (j in seq_along(species)) {
+    i <- idx[j]
+    m_fn <- stats::approxfun(c(params@w, params@species_params$w_inf[[i]]), 
+                             c(m[i, ], 0))
+    
+    survival <- function(t, state, parameters) {
+      with(as.list(c(state, parameters)), {
+        dS <- - m_fn(w) * S
+        list(c(w,dS))
+      })
+    }
+    
+    ws[j, ] <- deSolve::ode(y=c(w=params@species_params$w_min[j], S=1),
+                            times = age, func = survival,
+                            parms = 0)[,3]
+  }
+  if (percentage) {
+     ws[, ] <- ws[, ] * 100
+  }
+  
+  return(ws)
+}
+
+plotSurvivalcurves <- function(object, species = NULL, max_age = 10, percentage = FALSE, return_data = FALSE, highlight = NULL, species_panel = FALSE){
+  
+  if (is(object, "MizerSim")) {
+    params <- object@params
+    params <- setInitialValues(params, object)
+  }
+  else if (is(object, "MizerParams")) {
+    params <- validParams(object)
+  }
+  else {
+    stop("The first argument to `getGrowthCurves()` must be a ", 
+         "MizerParams or a MizerSim object.")
+  }
+  species <- valid_species_arg(params, species)
+  sp_sel <- params@species_params$species %in% species
+  ws <- getSurvivalcurves(object, species, max_age, percentage)
+
+  plot_dat <- reshape2::melt(ws)
+  plot_dat$Species <- factor(plot_dat$Species, params@species_params$species)
+  plot_dat$Legend <- "model"
+  
+  if (return_data) 
+    return(plot_dat)
+  p <- ggplot(filter(plot_dat, Legend == "model")) + 
+    geom_line(aes(x = Age, y = value, colour = Species, linetype = Species, 
+                  size = Species))
+  y_label <- if (percentage) 
+    "Percent of cohort remaining"
+  else "Fraction of cohort remaining"
+  
+  legend_levels <- intersect(c(dimnames(params@initial_n)$sp, 
+                               "Background", "Resource", "Total"), 
+                             plot_dat$Species)
+  plot_dat$Species <- factor(plot_dat$Species, levels = legend_levels)
+  linesize <- rep(0.8, length(legend_levels))
+  names(linesize) <- names(params@linetype[legend_levels])
+  linesize[highlight] <- 1.6
+  p <- p + scale_x_continuous(name = "Age [Years]") + 
+    scale_y_continuous(name = y_label) + scale_colour_manual(values = params@linecolour[legend_levels]) + 
+    scale_linetype_manual(values = params@linetype[legend_levels]) + 
+    scale_size_manual(values = linesize)
+  if (species_panel) {
+      p <- ggplot(plot_dat) + geom_line(aes(x = Age, y = value, 
+                                            colour = Legend)) + scale_x_continuous(name = "Age [years]") + 
+        scale_y_continuous(name = y_label) + 
+        facet_wrap(~Species, scales = "free_y")
+    }
+  return(p)
 }
