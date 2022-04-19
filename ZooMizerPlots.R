@@ -1217,8 +1217,7 @@ plotSurvivalcurves <- function(object, species = NULL, max_age = 10, percentage 
 }
 
 
-getSurvivalcurves<- function(object, species = NULL, max_age = 10, percentage = FALSE) 
-{
+getSurvivalCurves <- function(object, species = NULL, max_age = 5, percentage = FALSE){
   if (is(object, "MizerSim")) {
     params <- object@params
     params <- setInitialValues(params, object)
@@ -1227,7 +1226,7 @@ getSurvivalcurves<- function(object, species = NULL, max_age = 10, percentage = 
     params <- validParams(object)
   }
   else {
-    stop("The first argument to `getGrowthCurves()` must be a ", 
+    stop("The first argument to `getSurvivalCurves()` must be a ", 
          "MizerParams or a MizerSim object.")
   }
 
@@ -1235,11 +1234,9 @@ getSurvivalcurves<- function(object, species = NULL, max_age = 10, percentage = 
   idx <- which(params@species_params$species %in% species)
   species <- params@species_params$species[idx]
   age <- seq(0, max_age, length.out = 50)
-  # dt <- rep(age[2]-age[1], 50)
   ws <- array(dim = c(length(species), length(age)), dimnames = list(Species = species, 
                                                                      Age = age))
-  # get vector of phytoplankton and fish resource
-  
+
   m <- getMort(params)
   for (j in seq_along(species)) {
     i <- idx[j]
@@ -1264,7 +1261,7 @@ getSurvivalcurves<- function(object, species = NULL, max_age = 10, percentage = 
   return(ws)
 }
 
-plotSurvivalcurves <- function(object, species = NULL, max_age = 10, percentage = FALSE, return_data = FALSE, highlight = NULL, species_panel = FALSE){
+plotSurvivalCurves <- function(object, species = NULL, max_age = 10, percentage = FALSE, return_data = FALSE, highlight = NULL, species_panel = FALSE){
   
   if (is(object, "MizerSim")) {
     params <- object@params
@@ -1274,12 +1271,12 @@ plotSurvivalcurves <- function(object, species = NULL, max_age = 10, percentage 
     params <- validParams(object)
   }
   else {
-    stop("The first argument to `getGrowthCurves()` must be a ", 
+    stop("The first argument to `getSurvivalCurves()` must be a ", 
          "MizerParams or a MizerSim object.")
   }
   species <- valid_species_arg(params, species)
   sp_sel <- params@species_params$species %in% species
-  ws <- getSurvivalcurves(object, species, max_age, percentage)
+  ws <- getSurvivalCurves(object, species, max_age, percentage)
 
   plot_dat <- reshape2::melt(ws)
   plot_dat$Species <- factor(plot_dat$Species, params@species_params$species)
@@ -1308,7 +1305,7 @@ plotSurvivalcurves <- function(object, species = NULL, max_age = 10, percentage 
   if (species_panel) {
       p <- ggplot(plot_dat) + geom_line(aes(x = Age, y = value, 
                                             colour = Legend)) + scale_x_continuous(name = "Age [years]") + 
-        scale_y_continuous(name = "Size [g]") + 
+        scale_y_continuous(name = y_label) + 
         facet_wrap(~Species, scales = "free_y")
     }
   return(p)
