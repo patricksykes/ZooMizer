@@ -1138,7 +1138,6 @@ getSurvivalCurves <- function(object, species = NULL, max_age = 5, percentage = 
   age <- seq(0, max_age, length.out = 50)
   ws <- array(dim = c(length(species), length(age)), dimnames = list(Species = species, 
                                                                      Age = age))
-
   m <- getMort(params)
   for (j in seq_along(species)) {
     i <- idx[j]
