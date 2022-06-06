@@ -613,6 +613,20 @@ plotlyBackgroundMort <- function (object, species = NULL, time_range, highlight 
 summary_plot <- function(object, time_range) {
   if (is(object, "MizerSim")) {
     params <- object@params
+    params <- setInitialValues(params,object)
+    if (missing(time_range)) {
+      time_range  <- max(as.numeric(dimnames(object@n)$time))
+    }
+    if (length(time_range) > 1){
+    times <- max(getTimes(object))
+    params@initial_n[] <- colMeans(object@n[time_range,,])
+    nothers <- array(0,c(times,dim(params@initial_n_other[[1]])))
+    for (i in 1:times) {
+      nothers[i,,]  <- object@n_other[[i]]
+    }
+    params@initial_n_other$zoo[] <- colMeans(nothers[time_range,,])
+    params@initial_n_pp <- colMeans(object@n_pp[time_range,])
+    }
     }
   else {
     params <- validParams(object)
@@ -623,15 +637,17 @@ summary_plot <- function(object, time_range) {
   
   ts <- plotBiomass_ZooMizer(object)
   ss <- plotSpectra_ZooMizer(object, time_range = time_range, resource = FALSE, wlim = c(1e-14, NA))+theme(legend.position = "none")
-  diet <- plotDiet_ZooMizer(object, species = tail(object@params@species_params$species, 1))+theme(legend.position = "none")+labs(y="Proportion of fish diet")
-  bg <- plotBackgroundMort_ZooMizer(object)+theme(legend.position = "none")
-  pred <- plotPredMort_ZooMizer(object)+theme(legend.position = "none")
-  tm <- plotTotalMort_ZooMizer(object)+theme(legend.position = "none")
-  gc <- plotGrowthCurves(params@other_params$zoo$params, percentage = TRUE, max_age = 3)+
+  diet <- plotDiet_ZooMizer(params, species = tail(object@params@species_params$species, 1))+theme(legend.position = "none")+labs(y="Proportion of fish diet")
+  bg <- plotBackgroundMort_ZooMizer(params)+theme(legend.position = "none")
+  pred <- plotPredMort_ZooMizer(params)+theme(legend.position = "none")
+  tm <- plotTotalMort_ZooMizer(params)+theme(legend.position = "none")
+  gr <- plotZooGrowth(params)
+  gc <- plotGrowthCurves(params@other_params$zoo$params, percentage = TRUE, max_age = 2)+
     scale_colour_manual(values =  params@other_params$zoo$params@species_params$PlotColour)+
     theme(legend.position = "none")
+  surv <- plotSurvivalCurves_ZooMizer(params, max_age = 1)
   
-  plot <- (ts + ss + diet) / (bg + pred + tm + gc) + plot_layout(guides = "collect")
+  plot <- (ts + ss + diet) / (bg + pred + tm) / (gr + gc + surv) + plot_layout(guides = "collect")
 
   return(plot)
 }
@@ -837,13 +853,13 @@ plotTotalMort_ZooMizer <- function (object, species = NULL, time_range, all.size
     params <- validParams(object)
   }
   
-  pred <- plotPredMort_ZooMizer(object, return_data = TRUE, all.sizes = FALSE) %>% 
+  pred <- plotPredMort_ZooMizer(object, return_data = TRUE, all.sizes = TRUE) %>% 
     reshape2::acast(Species ~ w)
   zoo_idx <- which(params@w_full >= min(params@other_params$zoo$params@w))
   pred <- pred[,zoo_idx]
   pred[is.na(pred)] <- 0
   
-  bg <- plotBackgroundMort_ZooMizer(object, return_data = TRUE, all.sizes = FALSE) %>% 
+  bg <- plotBackgroundMort_ZooMizer(object, return_data = TRUE, all.sizes = TRUE) %>% 
     reshape2::acast(Species ~ w)
     bg[is.na(bg)] <- 0
   
@@ -878,10 +894,10 @@ plotTotalMort_ZooMizer <- function (object, species = NULL, time_range, all.size
                   colour = .data[[legend_var]], linetype = .data[[legend_var]], 
                   size = .data[[legend_var]]))+
     scale_colour_manual(values = linecolour)
-  
+
   suppressMessages(p <- p + scale_y_continuous(labels = prettyNum, 
                                                name = "Total mortality [1/year]",
-                                               limits = c(0,max(plot_dat$value))))
+                                               limits = c(0,max(frame$Mort))))
   p
 }
 
@@ -1080,7 +1096,7 @@ plotSurvivalCurves_ZooMizer <- function(object, species = NULL, max_age = 10, pe
   species <- valid_species_arg(zoo_params, species)
   sp_sel <- zoo_params@species_params$species %in% species
     
-  ws <- getSurvivalcurves_ZooMizer(object, species, max_age, percentage)
+  ws <- getSurvivalCurves_ZooMizer(object, species, max_age, percentage)
   
   colours <- zoo_params@species_params$PlotColour[sp_sel]
   names(colours) <- zoo_params@species_params$species
@@ -1211,3 +1227,30 @@ plotSurvivalCurves <- function(object, species = NULL, max_age = 10, percentage 
     }
   return(p)
 }
+
+plotZooGrowth <- function(params, byweight= TRUE, carbon = FALSE){
+  growths <- getEGrowth(params@other_params$zoo$params)
+  ylab = "Growth [g/day]"
+  if(byweight){
+    ws <- matrix(data = params@other_params$zoo$params@w, nrow = 9, ncol = 178, byrow=T)
+    growths <- growths/as.array(ws)
+    ylab = "Growth [1/day]"
+    }
+  #/params@other_params$zoo$params@species_params$Carbon
+  for(i in 1:9) growths[i,1:params@other_params$zoo$params@w_min_idx[i]] <- 0
+  growths <- melt(growths) %>% rename(Species = sp)
+  growths <- growths[which(growths$value > 0),]
+  colours <- params@other_params$zoo$params@species_params$PlotColour
+  
+  linesize <- rep(1.6, length(params@other_params$zoo$params@species_params$species))
+  names(linesize) <- names(params@other_params$zoo$params@linetype[1:9])
+  
+  ggplot(growths, aes(x=w, y=value/365))+
+    geom_line(aes(colour = Species))+
+    scale_x_log10()+
+    scale_color_manual(values = colours)+
+    scale_linetype_manual(values = c(params@other_params$zoo$params@linetype[1:nrow(params@other_params$zoo$params@species_params)]))+
+    scale_size_manual(values = linesize)+
+    labs(y = ylab, x = "Weight [g]")
+}
+
