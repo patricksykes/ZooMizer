@@ -151,7 +151,7 @@ newZooMizerParams <- function(groups, input, fish_params) {
   
   temp_eff <-  matrix(2.^((sst - 30)/10), nrow = length(params@species_params$species), ncol = length(params@w))
   
-  params@other_params$assim_eff <- setassim_eff(groups)
+  # params@other_params$assim_eff <- setassim_eff(groups)
   cc_phyto <- 0.1 #carbon content of phytoplankton
   params@other_params$assim_phyto <- params@species_params$GrossGEscale * cc_phyto #assimilation efficiency when eating phytoplankton
   
@@ -439,7 +439,7 @@ new_Encounter <- function(params, n, n_pp, n_other, t, ...) {
   # how much a predator eats - not which species are being eaten - that is
   # in the mortality calculation
   # \sum_j \theta_{ij} N_j(w_p) w_p dw_p
-  assim_prey <- params@other_params$assim_eff * params@interaction
+  assim_prey <- params@species_params$Carbon * params@interaction * matrix(params@species_params$GrossGEscale, nrow = nrow(params@interaction), ncol=ncol(params@interaction), byrow = TRUE, dimnames = dimnames(params@interaction))
   n_eff_prey <- sweep(assim_prey %*% n, 2,
                       params@w * params@dw, "*", check.margin = FALSE)
   # pred_kernel is predator species x predator size x prey size
@@ -874,3 +874,35 @@ zoo_predation <- function(params, n, n_pp, n_other, t, f_mort, pred_mort, ...){
   return(mort)
 }
 
+#' Get total mortality with density-dependent rate applied
+#' 
+#' Using density-dependent mortality rate from Benoit & Rochet 2004
+#'
+#' @inheritParams mizerRates
+#' @param f_mort A two dimensional array (species x size) with the fishing
+#'   mortality
+#' @param pred_mort A two dimensional array (species x size) with the predation
+#'   mortality
+#' @param ... Unused
+#'
+#' @return A named two dimensional array (species x size) with the total
+#'   mortality rates.
+#' @export
+#' @family mizer rate functions
+totalMortDD <- function(params, n, n_pp, n_other, t, f_mort, pred_mort, ...){
+mort <- pred_mort + params@mu_b + f_mort
+# Add contributions from other components
+# for (i in seq_along(params@other_mort)) {
+#   mort <- mort + 
+#     do.call(params@other_mort[[i]], 
+#             list(params = params,
+#                  n = n, n_pp = n_pp, n_other = n_other, t = t,
+#                  component = names(params@other_mort)[[i]], ...))
+# }
+ddmort <- sweep(n, "w", params@w^params@species_params$q[1] * params@dw, "*")
+ddmort <- ddmort * params@species_params$mu0DD
+# mu0 <- 80 # Benoit & Rochet value = 80, but no density-independent mortality in that model
+# ddmort[sp_sel,] <- mu0 * ddmort_raw[sp_sel,] #* params@species_params$w_inf
+# ddmort[6,] <- ddmort[6,] * 50
+return(mort + ddmort)
+}
