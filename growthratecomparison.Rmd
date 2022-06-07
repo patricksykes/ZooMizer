@@ -1,0 +1,110 @@
+---
+title: "Looking at ZooMizer growth rates"
+author: "Patrick Sykes"
+date: "13/05/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# Loading in the data
+
+I've picked a reasonably recent run where the coefficient of the density-dependent mortality on zooplankton has been applied to all groups and scaled with the maximum size of the group, so larger groups experience more density dependence. The rate for euphausiids, however, has been increased by a further factor of 50 in this run. Fish maximum feeding rates and search volumes have been returned to default as well.
+
+```{r readdata}
+library(foreach)
+
+jobname <- "20220517_Umort_DDmortonall_mu80_scalewinf_euphx50_h40_gamma640temp_1000yr"
+
+sims <- foreach(ID = 1:20) %do% {
+  ID_char <- sprintf("%04d",ID)
+  readRDS(paste0("Output/",jobname,"_ZooMizer_", ID_char,".RDS"))
+}
+
+enviro <- readRDS("data/enviro_grid20.RDS")
+
+```
+
+# Plots
+
+I'll load in a plot function and some calculating functions and plot for a low and high chlorophyll
+
+```{r plots, warning=FALSE}
+
+library(mizer)
+library(assertthat)
+library(tidyverse)
+source("ZooMizerSummaryFunctions.R")
+source("ZooMizerResourceFunctions.R")
+source("GrowthPlots.R")
+
+plotZooMizerGrowthsComparison(sims[[3]])+ plot_annotation(title = paste0("SST = ", enviro[3,'sst'], ", chlo = ", round(enviro[3,'chlo'], 3)))#sst = 20, chlo = -1.5
+
+plotZooMizerGrowthsComparison(sims[[11]])+ plot_annotation(title = paste0("SST = ", enviro[11,'sst'], ", chlo = ", round(enviro[11,'chlo'], 3)))#sst = 20, chlo = -0.5
+
+plotZooMizerGrowthsComparison(sims[[19]])+ plot_annotation(title = paste0("SST = ", enviro[19,'sst'], ", chlo = ", round(enviro[19,'chlo'], 3)))#sst = 20, chlo = 0.5
+
+```
+
+For reference, here are the bigger summary plots
+
+```{r, warning = FALSE}
+
+
+source("ZooMizerPlots.R")
+
+summary_plot(sims[[3]])+ plot_annotation(title = paste0("SST = ", enviro[3,'sst'], ", chlo = ", round(enviro[3,'chlo'], 3)))
+
+summary_plot(sims[[11]])+ plot_annotation(title = paste0("SST = ", enviro[11,'sst'], ", chlo = ", round(enviro[11,'chlo'], 3)))
+
+summary_plot(sims[[19]]) + plot_annotation(title = paste0("SST = ", enviro[19,'sst'], ", chlo = ", round(enviro[19,'chlo'], 3)))
+
+```
+
+While we're here, let's have a look at the biomass composition vs chlorophyll:
+
+```{r biomass}
+
+IDSelect <- c(3,7,11,15,19)
+
+b <- foreach(ID=IDSelect, .combine = rbind) %do% {
+  bioms <- getBiomass_ZooMizer(sims[[ID]], sims[[ID]]@params@other_params$zoo$params)
+  rows <- ceiling(nrow(bioms)/2):nrow(bioms)
+  colMeans(bioms[rows,])
+}
+
+df <- cbind(enviro[IDSelect,], b)
+propdf <- df
+propdf[,c(3:5,11:12)] <- propdf[,c(3:5,11:12)] / rowSums(propdf[,c(3:5,11:12)])
+propdf[,13:19] <- propdf[,13:19] / rowSums(propdf[,13:19])
+propdf[,20:32] <- propdf[,20:32] / rowSums(propdf[,20:32])
+
+df2 <- gather(propdf, Group, Proportion, c(pico_biom:micro_biom,Flagellates:Ciliates))
+ggplot(df2, aes(x=log10(chlo), y = Proportion, fill = Group)) + 
+  geom_area() +
+  labs(title = "Microzoo proportion")
+
+df3 <- gather(propdf, Group, Proportion, Larvaceans:Jellyfish)
+ggplot(df3, aes(x=log10(chlo), y = Proportion, fill = Group)) + 
+  geom_area() +
+  labs(title = "Zooplankton proportion")
+
+df4 <- gather(propdf, Group, Proportion, "1":"13")
+ggplot(df4, aes(x=log10(chlo), y = Proportion, fill = Group)) + 
+  geom_area() +
+  labs(title = "Fish proportion")
+
+# plot.dat <- data.frame(chlo = df$chlo, Proportion = c(df[,11:12]), Group = rep(Groups$species, each = length(df$chlo)))
+# 
+# ggplot(df) +
+#   geom_col(aes(x = chlo, y = Flagellates, position = "fill", colour = "red")) +
+#   geom_col(aes(x = chlo, y = Ciliates, position = "fill", colour = blue)) +
+#   #scale_x_log10() +
+#   labs(x = "Chlorophyll") #+ scale_fill_manual(values = params@linecolour[legend_levels])
+
+```
