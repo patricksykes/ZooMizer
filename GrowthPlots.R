@@ -27,7 +27,15 @@ library(patchwork)
 ## make sure zoo growth rates did not exceed empirical observations in the absence of phytoplankton
 ## dynamics
 
-plotZooMizerGrowthsComparison <- function(out){
+#' Plot a comparison of zooplankton growth rates against data
+#' 
+#' Reproduces the lot from Figure X of Heneghan et al. (2020) comparing zooplankton growth rates to data
+#'
+#' @param out A MizerSim object from ZooMizer
+#' @param sst The temperature used in out
+#'
+#' @return A ggplot comparing zooplankton growths to data
+plotZooMizerGrowthsComparison <- function(out, sst){
 
 params <- setInitialValues(out@params, out)
 times <- max(getTimes(out))
@@ -46,7 +54,7 @@ w <- params@other_params$zoo$params@w
 # for(i in 1:9) growth[i,1:params[[2]]@other_params$zoo$params@w_min_idx[i]] <- 0
 # w <- params[[2]]@other_params$zoo$params@w
 
-gg_all <- growth*(2^((15-30)/10)/2^((enviro[2,'sst'] - 30)/10))
+gg_all <- growth*(2^((15-30)/10)/2^((sst - 30)/10))
 
 gg <- gg_all/365 # Growth rates in years from model, convert to days
 gg[c(3,8),] <- 15*gg[c(3,8),] # Multiply larvs and salps by 15 ()

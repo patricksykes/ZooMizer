@@ -1,14 +1,14 @@
 #' Get Biomass of zooplankton and fish groups
 #'
 #' @param sim An object of class MizerSim containing the fish model
-#' @param zoo_params An object of class MizerParams containing the zooplankton model parameters
+#' @param zoo_params (Optional) An object of class MizerParams containing the zooplankton model parameters
 #' @param ... 
 #'
 #' @return An array (time x species) containing the biomass in grams.
 #' @export
 #'
 #' @examples
-getBiomass_ZooMizer <- function (sim, zoo_params, ...) 
+getBiomass_ZooMizer <- function (sim, zoo_params = sim@params@other_params$zoo$params, ...) 
 {
   assert_that(is(sim, "MizerSim"))
   assert_that(is(zoo_params, "MizerParams"))
@@ -28,14 +28,14 @@ getBiomass_ZooMizer <- function (sim, zoo_params, ...)
 #' Get abundance of zooplankton and fish groups
 #'
 #' @param sim An object of class MizerSim containing the fish model
-#' @param zoo_params An object of class MizerParams containing the zooplankton model parameters
+#' @param zoo_params (Optional) An object of class MizerParams containing the zooplankton model parameters
 #' @param ... 
 #'
 #' @return An array (time x species) containing the abundances.
 #' @export
 #'
 #' @examples
-getAbundance_ZooMizer <- function (sim, zoo_params, ...) 
+getAbundance_ZooMizer <- function (sim, sim@params@other_params$zoo$params, ...) 
 {
   assert_that(is(sim, "MizerSim"))
   assert_that(is(zoo_params, "MizerParams"))
