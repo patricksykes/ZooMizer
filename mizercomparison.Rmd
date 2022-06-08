@@ -376,7 +376,7 @@ phytoslopesplot / phytointsplot + plot_annotation(title = "Phyto slope + interce
 Now compare with a run of Mizer with a semichemostat resource:
 
 ```{r}
-mizerjobname <- '20220531_mizertest_alphapt6_rl0'
+mizerjobname <- '202200608_mizertest_alphapt6_rl0_zoocutoff100'
 ```
 
 
@@ -493,6 +493,7 @@ ZooMizer_mizercomp <- function(ID, tmax = 1000, effort = 0) {
                                 max_w_inf = 10^7,
                                 no_w = 10*(7-(-3))+1, # sets dx = 0.1
                                 min_w_pp = 10^(-14.5),
+                                w_pp_cutoff = 100, #corresponds to max jellyfish size of 100g in ZooMizer
                                 alpha = 0.6, 
                                 kappa = exp(intercept), #10^(input$phyto_int) * 10^-1,
                                 lambda = 1 - slope, # 1 - input$phyto_slope,
@@ -638,3 +639,59 @@ mslopesplot / mintsplot + plot_annotation(title = "Fish community slope + interc
 # phytoslopesplot / phytointsplot + plot_annotation(title = "Phyto slope + intercept")
 
 ```
+
+ZooMSS alone?
+
+```{r zoomssslopes}
+
+zoomssjobname <- "20220519_15deg_chlovarying"
+zsims <- foreach(ID = 1:25,
+                .packages = c("mizer", "assertthat", "tidyverse")
+                #.export = c("ZooMizer_coupled", "PredRate_temp")
+) %dopar% {
+  ID_char <- sprintf("%04d",ID)
+  readRDS(paste0("Output/", zoomssjobname, "_ZooMSS_", ID_char,".RDS"))
+}
+
+zslopes <- foreach(ID=c(1:25), .combine = rbind) %dopar% { 
+  colMeans(getCommunitySlope(zsims[[ID]], species = c("Fish_Small", "Fish_Med", "Fish_Large"))[751:1000,], na.rm = TRUE)
+}
+
+zslopes <- cbind(enviro, zslopes)
+
+zslopesplot <- ggplot(zslopes, aes(x=log10(chlo)))+
+  geom_point(aes(y=slope))
+zintsplot <- ggplot(zslopes, aes(x=log10(chlo)))+
+  geom_point(aes(y=intercept))
+
+zslopesplot / zintsplot + plot_annotation(title = "Fish community slope + intercept (ZooMSS fish only)")
+
+```
+
+
+## Compare biomass across the three models
+
+```{r biomscomparison}
+
+zoomizerbioms <- foreach(ID=1:25, .combine=rbind) %dopar% sum(colMeans(getBiomass(sims[[ID]])[751:1000,]))
+mizerbioms <- foreach(ID=1:25, .combine=rbind) %dopar% sum(colMeans(getBiomass(msims[[ID]])[76:100,]))
+zoomssbioms <- foreach(ID=1:25, .combine=rbind) %dopar% sum(colMeans(getBiomass(zsims[[ID]])[751:1000,]))
+
+bioms.df <- cbind(enviro, zoomizerbioms, mizerbioms, zoomssbioms)
+
+zmcol <- ggplot(bioms.df, aes(x=chlo))+
+  geom_col(aes(y=zoomizerbioms))+
+  scale_x_continuous(trans = "log10")
+
+zcol <-  ggplot(bioms.df, aes(x=chlo))+
+  geom_col(aes(y=zoomssbioms))+
+  scale_x_continuous(trans = "log10")
+
+mcol <-  ggplot(bioms.df, aes(x=chlo))+
+  geom_col(aes(y=mizerbioms))+
+  scale_x_continuous(trans = "log10")
+
+zmcol+mcol+zcol
+
+```
+
