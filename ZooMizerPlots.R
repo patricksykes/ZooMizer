@@ -719,6 +719,14 @@ plotBackgroundMort_ZooMizer <- function(object, species = NULL, time_range, all.
   p
 }
 
+#' Get the mortality rate due to predation for each species and size class
+#'
+#' @param object An object of class MizerSim or MizerParams with the fish model
+#'
+#' @return An array (species x weight) containing the mortality (1/year) foe each species and size class.
+#' @export
+#'
+#' @examples
 getPredMort_ZooMizer <- function(object) {
   if (is(object, "MizerSim")) {
         params <- setInitialValues(object@params, object)
