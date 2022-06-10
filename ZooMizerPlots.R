@@ -619,6 +619,22 @@ plotlyBackgroundMort <- function (object, species = NULL, time_range, highlight 
                                                       "w", "value"))
 }
 
+#' Plot a series of summary plots for ZooMizer
+#'
+#' This function produces a plot of biomass over time, size spectrum over the given
+#' time range, fish diet composition, mortality rates (background, predation, total),
+#' growth rates per species and size, growth curves (size at age) and survival curves.
+#'
+#' @param object An object of class MizerSim or MizerParams with the fish model
+#' @param time_range The time range (either a vector of values, a vector of min
+#'   and max time, or a single value) to average the abundances over. Default is
+#'   the final time step. Ignored when called with a \linkS4class{MizerParams}
+#'   object.
+#'
+#' @return A patchwork of ggplot2 objects
+#' @export
+#'
+#' @examples
 summary_plot <- function(object, time_range) {
   if (is(object, "MizerSim")) {
     params <- object@params
@@ -661,6 +677,23 @@ summary_plot <- function(object, time_range) {
   return(plot)
 }
 
+#' Plot the rate of background mortality of each species including zooplankton against size
+#'
+#' @param object An object of class MizerSim or MizerParams with the fish model
+#' @param species A list of  species to include in the plot
+#' @param time_range The time range (either a vector of values, a vector of min
+#'   and max time, or a single value) to average the abundances over. Default is
+#'   the final time step. Ignored when called with a \linkS4class{MizerParams}
+#'   object.
+#' @param all.sizes If TRUE, then predation mortality is plotted also for sizes outside a species' size range. Default FALSE.
+#' @param highlight Name or vector of names of the species to be highlighted.
+#' @param return_data A boolean value that determines whether the formatted data used for the plot is returned instead of the plot itself. Default value is FALSE
+#' @param ... Other arguments (currently unused)
+#'
+#' @return A ggplot2 object, unless return_data = TRUE, in which case a data frame with the three variables 'w', 'value', 'Species' is returned.
+#' @export
+#'
+#' @examples 
 plotBackgroundMort_ZooMizer <- function(object, species = NULL, time_range, all.sizes = FALSE, 
                                                  highlight = NULL, return_data = FALSE, ...) {
   assert_that(is.flag(all.sizes), is.flag(return_data))
@@ -780,6 +813,23 @@ getPredMort_ZooMizer <- function(object) {
   return(pred_mort)
 }
 
+#' Plot the rate of predation mortality of each species including zooplankton against size
+#'
+#' @param object An object of class MizerSim or MizerParams with the fish model
+#' @param species A list of  species to include in the plot
+#' @param time_range The time range (either a vector of values, a vector of min
+#'   and max time, or a single value) to average the abundances over. Default is
+#'   the final time step. Ignored when called with a \linkS4class{MizerParams}
+#'   object.
+#' @param all.sizes If TRUE, then predation mortality is plotted also for sizes outside a species' size range. Default FALSE.
+#' @param highlight Name or vector of names of the species to be highlighted.
+#' @param return_data A boolean value that determines whether the formatted data used for the plot is returned instead of the plot itself. Default value is FALSE
+#' @param ... Other arguments (currently unused)
+#'
+#' @return A ggplot2 object, unless return_data = TRUE, in which case a data frame with the three variables 'w', 'value', 'Species' is returned.
+#' @export
+#'
+#' @examples 
 plotPredMort_ZooMizer <- function (object, species = NULL, time_range, all.sizes = FALSE,
                                    highlight = NULL, return_data = FALSE, ...)
 {
@@ -857,6 +907,23 @@ fish_idx <- (length(params@w_full) - length(params@w) + 1):length(params@w_full)
   p
   }
 
+#' Plot the total mortality rate of each species including zooplankton against size
+#'
+#' @param object An object of class MizerSim or MizerParams with the fish model
+#' @param species A list of  species to include in the plot
+#' @param time_range The time range (either a vector of values, a vector of min
+#'   and max time, or a single value) to average the abundances over. Default is
+#'   the final time step. Ignored when called with a \linkS4class{MizerParams}
+#'   object.
+#' @param all.sizes If TRUE, then predation mortality is plotted also for sizes outside a species' size range. Default FALSE.
+#' @param highlight Name or vector of names of the species to be highlighted.
+#' @param return_data A boolean value that determines whether the formatted data used for the plot is returned instead of the plot itself. Default value is FALSE
+#' @param ... Other arguments (currently unused)
+#'
+#' @return A ggplot2 object, unless return_data = TRUE, in which case a data frame with the three variables 'w', 'value', 'Species' is returned.
+#' @export
+#'
+#' @examples 
 plotTotalMort_ZooMizer <- function (object, species = NULL, time_range, all.sizes = FALSE,
                                    highlight = NULL, return_data = FALSE, ...)
 {
