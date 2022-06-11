@@ -1,13 +1,15 @@
 start_time <- Sys.time()
 
+.libPaths("/home/uqpsykes/R/x86_64-pc-linux-gnu-library/4.0")
+
 library(mizer)
-library(purr)
+library(purrr)
 library(assertthat)
 
 #job specifics
 Groups <- read.csv("data/TestGroups_mizer.csv") # Load in functional group information
 
-zoomssjobname <- Sys.getenv('SLURM_JOB_NAME') #job name used on queue
+zoomssjobname <- "20220524zoomizergrid" #job name used on queue
 jobname <- Sys.getenv('SLURM_JOB_NAME')
 
 ID <- as.integer(Sys.getenv('SLURM_ARRAY_TASK_ID'))
@@ -20,8 +22,8 @@ enviro <- read.csv("data/envirogridsstchlo.csv")[ID,]
 source("uncoupledmodel.R")
 source("ZooMizerResourceFunctions.R")
 
-environment(new_project_simple) <- asNamespace('mizer')
-assignInNamespace("project_simple", new_project_simple, ns = "mizer")
+# environment(new_project_simple) <- asNamespace('mizer')
+# assignInNamespace("project_simple", new_project_simple, ns = "mizer")
 
 # Run the ZooMSS model inside Mizer:
 # phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa = 10^enviro$phyto_int[i], lambda= 1-enviro$phyto_slope[i], ... ) {
@@ -50,13 +52,13 @@ assignInNamespace("project_simple", new_project_simple, ns = "mizer")
 #   return(mort + ddmort)
 # }
 
-zoomss <- fZooMizer_run(groups = Groups, input = enviro, no_w = (1*177+1)) # dx=0.1
-saveRDS(zoomss, file = paste0("Output/", jobname, "_ZooMSS_", ID_char,".RDS"))
+# zoomss <- fZooMizer_run(groups = Groups, input = enviro, no_w = (1*177+1)) # dx=0.1
+# saveRDS(zoomss, file = paste0("Output/", zoomssjobname, "_ZooMSS_", ID_char,".RDS"))
 
 mid <- Sys.time()
-
-environment(project_simple) <- asNamespace('mizer')
-assignInNamespace("project_simple", project_simple, ns = "mizer")
+# 
+# environment(project_simple) <- asNamespace('mizer')
+# assignInNamespace("project_simple", project_simple, ns = "mizer")
 
 ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   groups <- read.csv("data/TestGroups_mizer.csv") #load in ZooMSS groups
@@ -71,7 +73,7 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   
   zoo_groups <- groups[which(groups$Type == "Zooplankton"),] #just keep the zooplankton
   
-  input <- read.csv("envirogridsstchlo.csv")[ID,]
+  input <- read.csv("data/envirogridsstchlo.csv")[ID,]
   
   stable_zoomizer <- readRDS(paste0("Output/", zoomssjobname, "_ZooMSS_", ID_char,".RDS"))
   
@@ -92,14 +94,13 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   new <- stable_zoo[which(groups$Type == "Zooplankton"),]
   
   temp_eff <- 2.^((input$sst - 30)/10)
-  R_factor = 4
   fish_params <- newTraitParams(no_sp = 13,
                                 min_w = 10^(-3),
                                 min_w_inf = 10^1,
                                 max_w_inf = 10^7,
                                 no_w = 10*(7-(-3))+1, # sets dx = 0.1
                                 min_w_pp = 10^(-14.5),
-                                alpha = 0.25, # * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
+                                alpha = 0.6, # * temp_eff, #takes care of assimilation efficiency & temp effect on Encounter
                                 kappa = exp(intercept), #10^(input$phyto_int) * 10^-1,
                                 lambda = 1 - slope, # 1 - input$phyto_slope,
                                 gamma = 640 * temp_eff, #takes care of temp effect on PredRate and Encounter
@@ -108,7 +109,7 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
                                 beta = 100,
                                 sigma = 1.3,
                                 # R_factor = 1.01, #RMax = RFactor * RDI, default 4. Note RDI 
-                                reproduction_level = 1/R_factor,
+                                reproduction_level = 0,
                                 fc = 0,
                                 ks = 0, #set metabolism to zero
                                 ext_mort_prop = 0, #currently zeroed since this is fitted. No need for temp effect here, calculates from PredMort
@@ -118,6 +119,8 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   # fish_params@species_params$gamma <- fish_params@species_params$gamma * temp_eff
   # fish_params <- setSearchVolume(fish_params)
   
+  fish_params@other_params$temp_eff <- 2.^((input$sst - 30)/10)
+  
   zoo_params <- newZooMizerParams(groups = zoo_groups, input = input, fish_params = fish_params)
   
   zoo_params@initial_n <- new[which(groups$Type == "Zooplankton"),]
@@ -125,8 +128,6 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   zoo_params@species_params$interaction_resource[9] <- 1 # make jellies eat resource (i.e. fish)
   
   ## Zooplankton Mortality
-  fish_params@other_params$temp_eff <- 2.^((input$sst - 30)/10)
-  
   
   #U-shaped mortality
   M <- getExtMort(zoo_params) # pulls out senescence
@@ -135,7 +136,7 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   allo_mort <- outer(z0pre, w(zoo_params)^(-1/4)) # mortality of z0pre * w^(-1/4)
   zoo_params <- setExtMort(zoo_params, ext_mort = M + allo_mort)
   
-  # hockey stick mortality (mizer background mortality + senescence)
+  # add fixed level of background mortality (so in total have mizer fixed background mortality + senescence)
   # M <- getExtMort(zoo_params) # pulls out senescence
   # z0pre <- rep(0, nrow(M))
   # z0pre[c(6,8)] <- 0.6 #choose groups to apply to; default Mizer value 0.6
@@ -159,8 +160,9 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   # zoo_params@species_params$h <- 40
   # zoo_params <- setMaxIntakeRate(zoo_params)
   
+  #Density-dependent mortality
   zoo_params@species_params$mu0DD <- rep(80, 9) * zoo_params@species_params$w_inf
-  zoo_params@species_params$mu0DD[6] <- zoo_params@species_params$mu0DD[6] * 50
+  zoo_params@species_params$mu0DD[6] <- zoo_params@species_params$mu0DD[6] * 50 #turn up density-dependent mortality on krill
   zoo_params <- setRateFunction(zoo_params, "Mort", "totalMortDD")
   
   fish_params <- fish_params %>%
@@ -189,10 +191,10 @@ ZooMizer_coupled <- function(ID, tmax = 1000, effort = 0) {
   # fish_params <- setParams(fish_params)
   
   # fish_params@species_params$R_max <- readRDS("data/rmaxs.RDS")/10
-  fish_params@species_params$erepro <- 1
+  # fish_params@species_params$erepro <- 1
   # fish_params@species_params$R_max <- fish_params@resource_params$kappa * fish_params@species_params$w_inf ^(-1.5)
   # fish_params@species_params$R_max <- fish_params@species_params$R_max * 10^(5+3*log10(input$chlo))
-  fish_params <- setBevertonHolt(fish_params, erepro = 1)
+  # fish_params <- setBevertonHolt(fish_params, erepro = 1)
   # fish_params@species_params$R_max <- fish_params@species_params$R_max * 10000
   # fish_params <- setRateFunction(fish_params, "FeedingLevel", "FeedingLevel_type3")
   # fish_params <- setExtMort(fish_params, ext_mort = array(data=0.1, dim=dim(fish_params@mu_b)))
