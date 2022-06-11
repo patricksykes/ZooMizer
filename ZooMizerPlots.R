@@ -1060,7 +1060,7 @@ getGrowthCurves_ZooMizer <- function (object, species = NULL, max_age = 10, perc
   return(ws)
 }
 
-getSurvivalCurves_ZooMizer<- function(object, species = NULL, max_age = 10, percentage = FALSE) 
+getSurvivalCurves_ZooMizer<- function(object, species = NULL, max_age = 10, percentage = FALSE, BG_only = FALSE) 
 {
   if (is(object, "MizerSim")) {
     params <- object@params
@@ -1087,8 +1087,12 @@ getSurvivalCurves_ZooMizer<- function(object, species = NULL, max_age = 10, perc
   fish_idx <- (length(params@w_full) - length(params@w) + 1):length(params@w_full)
   total_fish_n[fish_idx] <- colSums(params@initial_n)
   
-  g <- getEGrowth(zoo_params, n_pp = zoo_params@initial_n_pp + total_fish_n)
-  m <- getZooMort(params)
+  if (BG_only == FALSE) {
+    m <- getZooMort(params)
+  }
+  if (BG_only == TRUE) {
+    m <- params@other_params$zoo$params@mu_b
+  }
   for (j in seq_along(species)) {
     i <- idx[j]
     m_fn <- stats::approxfun(c(zoo_params@w, zoo_params@species_params$w_inf[[i]]), 
@@ -1163,7 +1167,7 @@ getSurvivalCurves_ZooMizer<- function(object, species = NULL, max_age = 10, perc
 #   }
 
     
-plotSurvivalCurves_ZooMizer <- function(object, species = NULL, max_age = 10, percentage = FALSE, return_data = FALSE, highlight = NULL, species_panel = FALSE){
+plotSurvivalCurves_ZooMizer <- function(object, species = NULL, max_age = 10, percentage = FALSE, BG_only = FALSE, return_data = FALSE, highlight = NULL, species_panel = FALSE){
   
   if (is(object, "MizerSim")) {
     params <- object@params
@@ -1180,7 +1184,7 @@ plotSurvivalCurves_ZooMizer <- function(object, species = NULL, max_age = 10, pe
   species <- valid_species_arg(zoo_params, species)
   sp_sel <- zoo_params@species_params$species %in% species
     
-  ws <- getSurvivalCurves_ZooMizer(object, species, max_age, percentage)
+  ws <- getSurvivalCurves_ZooMizer(object, species, max_age, percentage, BG_only)
   
   colours <- zoo_params@species_params$PlotColour[sp_sel]
   names(colours) <- zoo_params@species_params$species
