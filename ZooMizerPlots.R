@@ -1,4 +1,4 @@
-#' Title
+#' Plot the size spectrum for each species including zooplankton
 #'
 #' @param fish_object An object of class \linkS4class{MizerSim} or 
 #'   \linkS4class{MizerParams}.
@@ -256,7 +256,7 @@ getBiomassFrame_ZooMizer <- function (sim, zoo_params, species = NULL, start_tim
   return(bm)
 }
 
-#' Plot the biomass of species through time
+#' Plot the biomass of species including zooplankton through time
 #'
 #' @param sim An object of class MizerSim contianing the fish model
 #' @param zoo_params An object of class MizerParams containing the zooplankton model
@@ -360,7 +360,7 @@ getAbundanceFrame_ZooMizer <- function (sim, zoo_params, species = NULL, start_t
   return(bm)
 }
 
-#' Plot the abundance of species through time
+#' Plot the abundance of species including zooplankton through time
 #'
 #' @param sim An object of class MizerSim contianing the fish model
 #' @param zoo_params An object of class MizerParams containing the zooplankton model
@@ -513,7 +513,7 @@ getDiet_ZooMizer <- function(fish_params,
   return(diet)
 }
 
-#' Plot diet of fish including plankton group
+#' Plot diet of fish resolving zooplankton prey group
 #'
 #' @param fish_object An object of class MizerSim or MizerParams with the fish model
 #' @param zoo_params (Optional) An object of class MizerPrarams with the zooplankton model parameters
