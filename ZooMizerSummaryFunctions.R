@@ -35,7 +35,7 @@ getBiomass_ZooMizer <- function (sim, zoo_params = sim@params@other_params$zoo$p
 #' @export
 #'
 #' @examples
-getAbundance_ZooMizer <- function (sim, sim@params@other_params$zoo$params, ...) 
+getAbundance_ZooMizer <- function (sim, zoo_params = sim@params@other_params$zoo$params, ...) 
 {
   assert_that(is(sim, "MizerSim"))
   assert_that(is(zoo_params, "MizerParams"))
