@@ -765,7 +765,12 @@ mid <- Sys.time()
 environment(project_simple) <- asNamespace('mizer')
 assignInNamespace("project_simple", project_simple, ns = "mizer")
 
-ZooMizer_mizercomp <- function(ID, tmax = 1000, effort = 0) {
+phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa, lambda, ... ) {
+  npp <- params@initial_n_pp
+ return(npp)
+}
+
+ZooMizer_mizerfixed <- function(ID, tmax = 1000, effort = 0) {
   groups <- read.csv("data/TestGroups_mizer.csv") #load in ZooMSS groups
   
   #lower "starting proportion" of salps and chaetognaths
@@ -828,11 +833,9 @@ ZooMizer_mizercomp <- function(ID, tmax = 1000, effort = 0) {
                                 knife_edge_size = 10  # min size for fishing
   )
   
-phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa, lambda, ... ) {
-  npp <- kappa*params@w_full^(-lambda) #returns the fixed spectrum at every time step
-  npp[params@w_full > params@resource_params$w_pp_cutoff] <- 0
- return(npp)
-}
+  fish_params@resource_params$w_pp_cutoff <- 100
+fish_params@initial_n_pp <- fish_params@resource_params$kappa*fish_params@w_full^(-fish_params@resource_params$lambda)
+fish_params@initial_n_pp[params@w_full > 100] <- 0
 fish_params <- setResource(fish_params, resource_dynamics = "phyto_fixed")
   
   # fish_params@species_params$gamma <- fish_params@species_params$gamma * temp_eff
@@ -920,7 +923,7 @@ fish_params <- setResource(fish_params, resource_dynamics = "phyto_fixed")
   return(project(fish_params, t_max = tmax, dt = 0.01, effort = effort))
 }  
 
-out <- ZooMizer_mizercomp(ID, tmax = 100, effort = 0)
+out <- ZooMizer_mizerfixed(ID, tmax = 100, effort = 0)
 saveRDS(out, file = paste0("Output/", mizerfixedjobname, "_MizerFixed_", ID_char,".RDS"))
 
 end_time <- Sys.time()
@@ -950,6 +953,7 @@ mfintsplot <- ggplot(mfslopes, aes(x=log10(chlo)))+
 mfslopesplot / mfintsplot + plot_annotation(title = "Fish community slope + intercept (Mizer only)")
 
 ```
+
 Now compare biomass with other versions
 
 ```{r mizerfixedcompare}
