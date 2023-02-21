@@ -146,6 +146,9 @@ newZooMizerParams <- function(groups, input, fish_params) {
                                          #pred_kernel = ... #probably easiest to just import this/pre-calculate it, once dimensions are worked out
   )
   
+  params@other_params$sst <- sst
+  params@other_params$chlo <- chlo
+  
   params@species_params$w_min <- groups$w_min  #fix Mizer setting the egg weight to be one size larger for some groups.
   #params@initial_n[] <- readRDS("data/initialn.RDS")
   
