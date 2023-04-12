@@ -36,7 +36,8 @@ biom.df <- cbind(enviro, all_bioms) %>%
   mutate(AllFish = fish1 + fish2 + fish3 + fish4 +fish5)
 
 
-tiles <- foreach(i = 9:23) %dopar% {
+today <- Sys.Date()
+tiles <- foreach(i = 9:ncol(biom.df)) %dopar% {
   column <- sym(colnames(biom.df)[i])
   ggplot(biom.df, aes(x=sst, y = log10(chlo)))+
     geom_tile(aes(fill=log10(!!column)))+

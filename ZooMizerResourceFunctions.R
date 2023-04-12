@@ -98,6 +98,12 @@ setZooMizerConstants <- function(params, Groups, sst){
   return(params)
 }
 
+phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa=params@resource_params$kappa, lambda=params@resource_params$lambda, ... ) {
+  npp <- kappa*params@w_full^(1-lambda) / params@dw_full #returns the fixed spectrum at every time step
+  npp[params@w_full > params@resource_params$w_pp_cutoff* (1 - 1e-06)] <- 0
+  return(npp)
+}
+
 #' Set up MizerParams object for zooplankton model
 #' 
 #' @param groups TODO Patrick: document this
@@ -108,12 +114,13 @@ newZooMizerParams <- function(groups, input, fish_params) {
   # This is essentially the existing function fZooMizer_run() but without
   # actually running the model
 
-  kappa = 10^(input$phyto_int)
-  lambda = 1-input$phyto_slope
-  chlo = input$chlo
-  sst = input$sst
-  dt = input$dt
-  tmax = input$tmax
+  kappa <- 10^(input$phyto_int)
+  lambda <- 1-input$phyto_slope
+  w_pp_cutoff <- 10^(input$phyto_max)* (1 + 1e-06)
+  chlo <- input$chlo
+  sst <- input$sst
+  dt <- input$dt
+  tmax <- input$tmax
   
   #data
   groups$w_min <- 10^groups$w_min #convert from log10 values
@@ -128,7 +135,13 @@ newZooMizerParams <- function(groups, input, fish_params) {
   
     #todo - ramp up constant repro for coexistence
   
-  params <- new_newMultispeciesParams(species_params=groups,
+  phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa=resource_params(params)[["kappa"]], lambda=resource_params(params)[["lambda"]], ... ) {
+    npp <- kappa*params@w_full^(1-lambda) / params@dw_full #returns the fixed spectrum at every time step
+    npp[params@w_full > params@resource_params$w_pp_cutoff* (1 - 1e-06)] <- 0
+    return(npp)
+  }
+  
+  params <- new_ZooplanktonParams(species_params=groups,
                                          interaction=NULL, #NULL sets all to 1, no strict herbivores
                                          #min_w = 10^(-10.7),
                                          #max_w = 10^7* (1 + 1e-06),
@@ -142,12 +155,21 @@ newZooMizerParams <- function(groups, input, fish_params) {
                                          resource_dynamics = "phyto_fixed",
                                          kappa = kappa,
                                          lambda = lambda,
-                                         RDD = constantRDD(species_params = groups), #first go at this
+                                         RDD = constantRDD(species_params = groups) #first go at this
                                          #pred_kernel = ... #probably easiest to just import this/pre-calculate it, once dimensions are worked out
   )
   
   params@other_params$sst <- sst
   params@other_params$chlo <- chlo
+  
+  
+  
+  
+  params@resource_dynamics<-"phyto_fixed"
+  params <- setResource(params, resource_dynamics = "phyto_fixed", kappa = kappa, lambda = lambda, w_pp_cutoff = w_pp_cutoff, n=0.7)
+  
+  initialNResource(params)<-kappa*params@w_full^(1-lambda) / params@dw_full #returns the fixed spectrum at every time step
+  initialNResource(params)[params@w_full > params@resource_params$w_pp_cutoff* (1 - 1e-06)] <- 0
   
   params@species_params$w_min <- groups$w_min  #fix Mizer setting the egg weight to be one size larger for some groups.
   #params@initial_n[] <- readRDS("data/initialn.RDS")
@@ -287,12 +309,6 @@ resource_zooMizer <- function(params, n_other, ...) {
   total_n_eff[zoo_idx] <- total_n_eff[zoo_idx] + n_eff
   
   return(total_n_eff)
-}
-
-phyto_fixed <- function(params, n, n_pp, n_other, rates, dt, kappa=params@resource_params$kappa, lambda=params@resource_params$lambda, ... ) {
-  npp <- kappa*params@w_full^(1-lambda) / params@dw_full #returns the fixed spectrum at every time step
-  npp[params@w_full > params@resource_params$w_pp_cutoff* (1 - 1e-06)] <- 0
-  return(npp)
 }
 
 setassim_eff <- function(groups){
@@ -499,7 +515,7 @@ FeedingLevel_type3 <- function (params, n, n_pp, n_other, t, encounter, ...)
   return(encounter^2 / (encounter^2 + params@intake_max^2)) #sigmoidal type 3 feeding
 }
 
-new_newMultispeciesParams <- function(
+new_ZooplanktonParams <- function(
   species_params,
   interaction = NULL,
   no_w = 100,
@@ -532,7 +548,7 @@ new_newMultispeciesParams <- function(
   kappa = 1e11,
   lambda = 2.05,
   w_pp_cutoff = 10,
-  resource_dynamics = "resource_semichemostat",
+  resource_dynamics = "phyto_fixed",
   # setFishing
   gear_params = data.frame(),
   selectivity = NULL,
@@ -598,6 +614,14 @@ new_newMultispeciesParams <- function(
               selectivity = selectivity,
               catchability = catchability,
               initial_effort = initial_effort)
+  setResource(params, resource_rate = resource_rate,
+              resource_capacity = resource_capacity,
+              n = n,
+              r_pp = r_pp,
+              kappa = kappa,
+              lambda = lambda,
+              w_pp_cutoff = w_pp_cutoff,
+              resource_dynamics = resource_dynamics)
 
   params@initial_n <- get_initial_n(params)
   params@initial_n_pp <- params@cc_pp

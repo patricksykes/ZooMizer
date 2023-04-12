@@ -343,9 +343,9 @@ gg3 <- ggplot(df4, aes(x=log10(chlo), y = Proportion, fill = Group)) +
   labs(title = "Fish proportion")
 
 library(patchwork)
-gg1
-gg2
-gg3
+gg1 / gg2 / gg3
+
+
 
 ```
 
